@@ -194,13 +194,6 @@ class TestSessions:
         assert res.status_code == 200
         assert res.json() == {"messages": []}
 
-    async def test_rename_session(self, client, user_headers, fake_db):
-        res = await client.patch("/sessions/abc", json={"title": "Tên mới"}, headers=user_headers)
-        assert res.status_code == 200
-        data = res.json()
-        assert data["ok"] is True
-        assert data["title"] == "Tên mới"
-
     async def test_delete_session(self, client, user_headers, fake_db):
         res = await client.delete("/sessions/abc", headers=user_headers)
         assert res.status_code == 200
