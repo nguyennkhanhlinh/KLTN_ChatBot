@@ -1,4 +1,6 @@
-const BASE_URL = "http://localhost:8000";
+const BASE_URL = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? 'http://localhost:8000'
+  : 'https://kltn-chatbot.onrender.com';
 
 localStorage.removeItem("chatbot:token");
 localStorage.removeItem("chatbot:username");

@@ -1,4 +1,6 @@
-const API = 'http://localhost:8000';
+const API = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? 'http://localhost:8000'
+  : 'https://kltn-chatbot.onrender.com';
 
 const _token = localStorage.getItem('chatbot:token');
 if (!_token) { window.location.replace('login.html'); }
