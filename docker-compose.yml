@@ -1,0 +1,83 @@
+services:
+  # ============================================
+  # PostgreSQL + pgvector — DB chính + vector store cho RAG
+  # (BẮT BUỘC pgvector: init-db.sql chạy CREATE EXTENSION vector)
+  # ============================================
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: kltn-db
+    environment:
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: ${PG_DB}
+    ports:
+      - "5435:5432"   # host 5435 (tránh đụng Postgres dev đang chạy ở 5432); nội bộ vẫn 5432
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER} -d ${PG_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - kltn-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+    restart: unless-stopped
+
+  # ============================================
+  # Backend — FastAPI + LangGraph (build từ Dockerfile)
+  # ============================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kltn-backend
+    env_file: .env            # OPENAI_API_KEY, JWT_SECRET_KEY, PG_USER/PASSWORD/DB...
+    environment:
+      # DB chính + vector store dùng chung service "db" (ghi đè giá trị trong .env).
+      PG_HOST: db
+      VECTOR_PG_HOST: db
+      VECTOR_PG_PORT: "5432"
+      VECTOR_PG_DB: ${PG_DB}
+      VECTOR_PG_USER: ${PG_USER}
+      VECTOR_PG_PASSWORD: ${PG_PASSWORD}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s        # embedding/rerank/LLM đều qua API, không load model local
+    networks:
+      - kltn-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G           # chỉ FastAPI + LangGraph, không còn torch/model local
+          cpus: "1.0"
+        reservations:
+          memory: 512M
+    restart: unless-stopped
+
+# ============================================
+# Named volumes — lưu dữ liệu Postgres bền vững
+# ============================================
+volumes:
+  postgres-data:
+    driver: local
+
+# ============================================
+# Network — cách ly các service
+# ============================================
+networks:
+  kltn-network:
+    driver: bridge

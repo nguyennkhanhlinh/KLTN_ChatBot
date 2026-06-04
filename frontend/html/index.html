@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chatbot</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+
+    <!-- ===== SIDEBAR ===== -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-brand">
+          <span class="sidebar-logo-icon">
+            <img src="../assets/images/deal.png" alt="Logo" />
+          </span>
+          <div class="sidebar-brand-text">
+            <span class="sidebar-title">Chatbot</span>
+            <span class="sidebar-brand-sub">Tư vấn Bất Động Sản</span>
+          </div>
+        </div>
+      </div>
+
+      <button class="new-chat-btn" id="newChatBtn" title="Cuộc trò chuyện mới">
+        <img src="../assets/images/talk.png" alt="" class="new-chat-icon" />
+        <span>Chat mới</span>
+      </button>
+
+      <button class="search-btn" id="searchBtn" title="Tìm kiếm">
+        <img src="../assets/images/magnifying-glass.png" alt="" class="new-chat-icon" />
+        <span>Tìm kiếm</span>
+      </button>
+
+      <div class="search-box" id="searchBox" hidden>
+        <input type="text" id="searchInput" placeholder="Tìm trong lịch sử..." />
+      </div>
+
+      <div class="sidebar-history-section">
+        <span class="sidebar-history-label"><img src="../assets/images/memory.png" alt="" class="history-icon" />Lịch sử</span>
+        <div class="history-list" id="historyList">
+          <p class="history-empty">Chưa có cuộc trò chuyện nào.</p>
+        </div>
+      </div>
+
+
+      <button class="sidebar-collapse-btn" id="collapseBtn" title="Thu gọn">
+        <svg viewBox="0 0 24 24" width="16" height="16"><polyline points="15 18 9 12 15 6"/><polyline points="9 18 3 12 9 6"/></svg>
+      </button>
+    </aside>
+
+    <!-- Nút mở lại sidebar khi đã collapse -->
+    <button class="sidebar-open-btn" id="openBtn" title="Mở sidebar">
+      <svg viewBox="0 0 24 24" width="16" height="16"><polyline points="9 18 15 12 9 6"/><polyline points="15 18 21 12 15 6"/></svg>
+    </button>
+
+    <!-- ===== MAIN ===== -->
+    <div class="main-content">
+
+      <!-- Header -->
+      <header class="top-header">
+        <div class="header-left">
+          <span class="header-date">
+            <svg viewBox="0 0 24 24" width="14" height="14"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span id="current-date"></span>
+          </span>
+        </div>
+
+        <div class="header-right">
+          <!-- Model Selector -->
+          <div class="model-selector-wrap" id="modelSelectorWrap">
+            <button class="model-selector-btn" id="modelSelectorBtn" title="Chọn model">
+              <svg viewBox="0 0 24 24" width="15" height="15" class="model-icon"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+              <span id="modelLabel">GPT-4.1 Mini</span>
+              <svg viewBox="0 0 24 24" width="13" height="13" class="chevron-icon"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+
+            <div class="model-dropdown" id="modelDropdown" hidden>
+              <div class="model-dropdown-item" data-model="gpt-4.1-mini">
+                <div class="model-item-main">
+                  <span class="model-item-name">GPT-4.1 Mini</span>
+                  <span class="model-check">
+                    <svg viewBox="0 0 24 24" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+                  </span>
+                </div>
+                <span class="model-item-desc">Nhanh, hiệu quả</span>
+              </div>
+<div class="model-dropdown-item" data-model="o4-mini">
+                <div class="model-item-main">
+                  <span class="model-item-name">O4 Mini</span>
+                  <span class="model-check">
+                    <svg viewBox="0 0 24 24" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+                  </span>
+                </div>
+                <span class="model-item-desc">Phù hợp cho các tác vụ phức tạp</span>
+              </div>
+              <div class="model-dropdown-item" data-model="deepseek/deepseek-v4-flash">
+                <div class="model-item-main">
+                  <span class="model-item-name">DeepSeek V4 Flash</span>
+                  <span class="model-check">
+                    <svg viewBox="0 0 24 24" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+                  </span>
+                </div>
+                <span class="model-item-desc">Phù hợp với các tác vụ đơn giản</span>
+              </div>
+              <div class="model-dropdown-item" data-model="qwen/qwen3.5-flash-02-23">
+                <div class="model-item-main">
+                  <span class="model-item-name">Qwen3.5 Flash</span>
+                  <span class="model-check">
+                    <svg viewBox="0 0 24 24" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+                  </span>
+                </div>
+                <span class="model-item-desc">Phản hồi nhanh cho tác vụ nhẹ</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- User info dropdown -->
+          <div class="header-user-wrap" id="headerUserWrap">
+            <div class="header-user-info" id="headerUserBtn">
+              <div class="sidebar-user-avatar" id="sidebarUserAvatar">U</div>
+              <div class="sidebar-user-details">
+                <span class="sidebar-user-name" id="sidebarUserName">—</span>
+                <span class="sidebar-user-role" id="sidebarUserRole">user</span>
+              </div>
+            </div>
+            <div class="header-user-dropdown" id="headerUserDropdown" hidden>
+              <button class="header-menu-btn" id="profileBtn">
+                <svg viewBox="0 0 24 24" width="14" height="14"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                Hồ sơ
+              </button>
+              <a class="header-menu-btn" id="adminPageBtn" href="admin.html" hidden>
+                <svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                Admin
+              </a>
+              <button class="header-logout-btn" id="logoutBtn">
+                <svg viewBox="0 0 24 24" width="14" height="14"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Đăng xuất
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </header>
+
+      <!-- Chat Area -->
+      <div class="chat-wrapper">
+        <div class="chat-area welcome-mode" id="chatArea">
+
+          <!-- Welcome State -->
+          <div class="welcome-screen" id="welcomeScreen">
+            <h1 class="welcome-title">XIN CHÀO</h1>
+            <div class="welcome-sphere-wrap">
+              <div class="sphere-ring r1"></div>
+              <div class="sphere-ring r2"></div>
+              <div class="sphere-glow"></div>
+              <img class="sphere-robot" src="../assets/images/robot.png" alt="AI" />
+            </div>
+            <p class="welcome-subtitle">Tôi có thể giúp gì cho bạn?</p>
+          </div>
+
+          <!-- Messages container -->
+          <div class="messages-container" id="messagesContainer"></div>
+
+          <!-- Input Bar -->
+          <div class="input-bar" id="inputBar">
+            <div class="input-wrapper">
+              <textarea
+                id="chatInput"
+                class="chat-input"
+                placeholder="Câu hỏi của bạn về Bất Động Sản..."
+                rows="1"
+                maxlength="1000"
+              ></textarea>
+              <button class="send-btn" id="sendBtn" title="Gửi">
+                <svg viewBox="0 0 24 24" width="18" height="18"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+              </button>
+            </div>
+            <div class="input-counter" id="inputCounter">0/1000</div>
+
+            <div class="suggestion-grid" id="suggestionGrid">
+              <button class="suggestion-card" data-q="Với tài chính dưới 5 tỷ, hãy gợi ý cho tôi các bất động sản ở Gia Lâm">
+                <span class="suggestion-icon">
+                  <svg viewBox="0 0 24 24" width="18" height="18"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                </span>
+                <span class="suggestion-text">Với tài chính dưới 5 tỷ, hãy gợi ý cho tôi các bất động sản ở Gia Lâm</span>
+                <svg class="suggestion-arrow" viewBox="0 0 24 24" width="13" height="13"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+              <button class="suggestion-card" data-q="Biểu đồ giá nhà trung bình theo từng quận">
+                <span class="suggestion-icon">
+                  <svg viewBox="0 0 24 24" width="18" height="18"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                </span>
+                <span class="suggestion-text">Biểu đồ giá nhà trung bình theo từng quận</span>
+                <svg class="suggestion-arrow" viewBox="0 0 24 24" width="13" height="13"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+              <button class="suggestion-card" data-q="Tôi có 1.5 tỷ vốn tự có, thu nhập 35 triệu/tháng, muốn mua căn 4 tỷ. Vay lãi suất 9%/năm trong 20 năm, đánh giá rủi ro tài chính giúp tôi">
+                <span class="suggestion-icon">
+                  <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </span>
+                <span class="suggestion-text">Tôi có 1.5 tỷ vốn, thu nhập 35 triệu/tháng, muốn mua căn 4 tỷ, vay 9%/năm trong 20 năm, đánh giá rủi ro tài chính giúp tôi</span>
+                <svg class="suggestion-arrow" viewBox="0 0 24 24" width="13" height="13"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+              <button class="suggestion-card" data-q="Tìm kiếm Bất Động Sản ở Thanh Xuân, có 3 phòng ngủ, thiết kế hiện đại, thoáng đãng">
+                <span class="suggestion-icon">
+                  <svg viewBox="0 0 24 24" width="18" height="18"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="9" y1="22" x2="9" y2="12"/><line x1="15" y1="22" x2="15" y2="16"/></svg>
+                </span>
+                <span class="suggestion-text">Tìm kiếm Bất Động Sản ở Ba Đình, có 3 phòng ngủ, thiết kế hiện đại, thoáng đãng</span>
+                <svg class="suggestion-arrow" viewBox="0 0 24 24" width="13" height="13"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Profile Modal -->
+  <div class="modal-overlay" id="profileModal" hidden>
+    <div class="profile-modal">
+      <div class="profile-modal-header">
+        <div class="profile-modal-title">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Thông tin tài khoản
+        </div>
+        <button class="profile-modal-close" id="profileModalClose">
+          <svg viewBox="0 0 24 24" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="profile-modal-body">
+        <div class="profile-field">
+          <span class="profile-label">Tên đăng nhập</span>
+          <span class="profile-value" id="profileUsername">—</span>
+        </div>
+        <div class="profile-field">
+          <span class="profile-label">Gmail</span>
+          <span class="profile-value" id="profileEmail">—</span>
+        </div>
+        <div class="profile-field">
+          <span class="profile-label">Số điện thoại</span>
+          <span class="profile-value" id="profilePhone">—</span>
+        </div>
+        <div class="profile-field">
+          <span class="profile-label">Ngày tạo</span>
+          <span class="profile-value" id="profileCreatedAt">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/main.js"></script>
+</body>
+</html>
+
+

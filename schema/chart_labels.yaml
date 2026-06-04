@@ -1,0 +1,17 @@
+labels:
+  quan: "Quận/Huyện"
+  tieu_de: "Tiêu đề"
+  phuong: "Phường/Xã"
+  so_tang: "Số tầng"
+  dien_tich: "Diện tích (m²)"
+  tong_gia: "Tổng giá (tỷ)"
+  gia_theo_m2: "Giá/m² (triệu)"
+  ngay_dang: "Ngày đăng"
+  phap_ly: "Pháp lý"
+  noi_that: "Nội thất"
+  so_luong: "Số lượng"
+  gia_trung_binh: "Giá trung bình (tỷ)"
+  avg_gia: "Giá trung bình (tỷ)"
+  count: "Số lượng"
+
+fallback: "Cột khác (vd: avg(...), count(...)): bỏ dấu ngoặc/underscore, viết Title Case."

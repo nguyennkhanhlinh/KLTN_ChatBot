@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — Chatbot</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="admin-layout">
+
+    <!-- Sidebar -->
+    <aside class="admin-sidebar">
+      <div class="admin-brand">
+        <svg viewBox="0 0 24 24" width="22" height="22" stroke="#4f8ef7" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span>Admin</span>
+      </div>
+
+      <nav class="admin-nav">
+        <button class="admin-nav-item active" data-tab="users">
+          <svg viewBox="0 0 24 24" width="15" height="15"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Tài khoản
+        </button>
+        <button class="admin-nav-item" data-tab="sessions">
+          <svg viewBox="0 0 24 24" width="15" height="15"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Lịch sử chat
+        </button>
+      </nav>
+
+      <div class="admin-sidebar-footer">
+        <a href="index.html" class="admin-back-btn">
+          <svg viewBox="0 0 24 24" width="14" height="14"><polyline points="15 18 9 12 15 6"/></svg>
+          Về trang chat
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="admin-main">
+
+      <!-- Users tab -->
+      <div class="admin-tab" id="tab-users">
+        <div class="admin-tab-header">
+          <h2 class="admin-section-title">Tài khoản</h2>
+          <input type="text" id="userFilterInput" class="admin-filter-input" placeholder="Tìm theo username..." />
+        </div>
+
+        <div class="create-user-form" id="createUserForm">
+          <input id="newUsername" type="text" placeholder="Username" />
+          <input id="newPassword" type="password" placeholder="Mật khẩu" />
+          <select id="newRole">
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+          <button class="admin-action-btn" id="createUserBtn">Tạo</button>
+        </div>
+        <div id="createUserError" class="admin-error" hidden></div>
+
+        <div class="admin-table-wrap">
+          <table class="admin-table" id="usersTable">
+            <thead>
+              <tr><th>Username</th><th>Password</th><th>Gmail</th><th>SĐT</th><th>Role</th><th>Ngày tạo</th></tr>
+            </thead>
+            <tbody id="usersTableBody">
+              <tr><td colspan="4" class="table-empty">Đang tải...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Sessions tab -->
+      <div class="admin-tab" id="tab-sessions" hidden>
+        <div class="admin-tab-header">
+          <h2 class="admin-section-title">Lịch sử chat</h2>
+          <input type="text" id="sessionFilterInput" class="admin-filter-input" placeholder="Lọc theo username..." />
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table" id="sessionsTable">
+            <thead>
+              <tr><th>Người dùng</th><th>Tiêu đề</th><th>Thời gian</th></tr>
+            </thead>
+            <tbody id="sessionsTableBody">
+              <tr><td colspan="4" class="table-empty">Đang tải...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Session history modal -->
+  <div class="modal-overlay" id="sessionModal" hidden>
+    <div class="session-modal">
+      <div class="profile-modal-header">
+        <div class="profile-modal-title">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span id="sessionModalTitle">Lịch sử trò chuyện</span>
+        </div>
+        <button class="profile-modal-close" id="sessionModalClose">
+          <svg viewBox="0 0 24 24" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="session-modal-body" id="sessionModalBody"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <script src="../js/admin.js"></script>
+</body>
+</html>
+
