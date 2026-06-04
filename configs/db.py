@@ -36,7 +36,7 @@ class DBConfig:
 
 class VectorDBConfig:
     HOST     = os.getenv("VECTOR_PG_HOST", "localhost")
-    PORT     = int(os.getenv("VECTOR_PG_PORT", 5433))
+    PORT     = int(os.getenv("VECTOR_PG_PORT", 5432))
     NAME     = os.getenv("VECTOR_PG_DB", "a45839")
     USER     = os.getenv("VECTOR_PG_USER", "a45839")
     PASSWORD = os.getenv("VECTOR_PG_PASSWORD", "a45839")
