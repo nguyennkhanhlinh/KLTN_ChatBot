@@ -11,7 +11,7 @@ from langchain.agents import create_agent, AgentState
 from langchain.agents.middleware import before_model
 from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
-from langchain_core.messages import HumanMessage, ToolMessage, RemoveMessage
+from langchain_core.messages import HumanMessage, RemoveMessage
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
 from langgraph.runtime import Runtime
 from dotenv import load_dotenv
@@ -78,7 +78,7 @@ def _clean_no_info(text: str) -> str:
             return prefix + "Không rõ"
         return line
 
-    return "\n".join(_fix(l) for l in text.split("\n"))
+    return "\n".join(_fix(line) for line in text.split("\n"))
 
 
 def build_supervisor(model: str = _DEFAULT_MODEL, checkpointer=_sentinel):

@@ -25,7 +25,6 @@ from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langsmith import Client
 from langsmith.evaluation import evaluate
-from langsmith.schemas import Run, Example
 
 from src.agents.Supervisor_agent import build_supervisor
 from evaluation.end_to_end.dataset_e2e import DATASET_NAME, EXAMPLES

@@ -42,6 +42,14 @@ dev = [
     "pytest-cov>=7.1.0",
 ]
 
+[tool.ruff]
+# Notebook là file thăm dò dữ liệu, không lint.
+extend-exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
+# E402: nhiều module cố ý sys.path.append + load_dotenv() trước khi import.
+ignore = ["E402"]
+
 [tool.coverage.run]
 source = ["src"]
 omit = [

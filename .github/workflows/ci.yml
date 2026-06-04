@@ -12,7 +12,6 @@ jobs:
   lint:
     name: Lint (Ruff)
     runs-on: ubuntu-latest
-    continue-on-error: true   # không chặn pipeline; bỏ dòng này khi code đã sạch lint
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

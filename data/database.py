@@ -1,9 +1,8 @@
-import sys, os
+import sys
+import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import psycopg2
 from psycopg2 import pool
-from psycopg2.extras import execute_batch
 from contextlib import contextmanager
 from configs.db import DBConfig
 
