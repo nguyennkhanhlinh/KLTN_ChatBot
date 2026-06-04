@@ -51,8 +51,9 @@ jobs:
       VECTOR_PG_DB: a45839
       VECTOR_PG_USER: a45839
       VECTOR_PG_PASSWORD: a45839
-      # Không cần key thật cho unit test (đã mock); để rỗng cho qua bước khởi tạo client.
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      # Unit test đã mock nên không gọi API thật — chỉ cần key khác rỗng để
+      # OpenAI client khởi tạo được lúc import (dùng secret nếu có, không thì dummy).
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'sk-or-ci-dummy' }}
     steps:
       - uses: actions/checkout@v4
 
