@@ -36,10 +36,22 @@ html, body {
 }
 
 /* ===== LAYOUT ===== */
+/* Nền particle network động (đồng bộ với trang login) */
+.app-bg-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
 .app-layout {
   display: flex;
   height: 100vh;
   overflow: hidden;
+  position: relative;
+  z-index: 1;
 }
 
 /* ===== SIDEBAR ===== */
@@ -459,7 +471,8 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--bg-primary);
+  /* Trong suốt để nền particle hiện qua + glow xanh dịu phía trên */
+  background: radial-gradient(120% 80% at 50% -10%, rgba(79,142,247,0.10), transparent 55%);
 }
 
 /* ===== HEADER ===== */
@@ -1572,7 +1585,8 @@ html, body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: var(--bg-secondary);
+  /* Bán trong suốt để nền particle hiện dịu phía sau (vẫn đủ tối để đọc) */
+  background: rgba(6, 15, 36, 0.68);
   border: 1px solid var(--border);
   border-radius: 16px;
   position: relative;
