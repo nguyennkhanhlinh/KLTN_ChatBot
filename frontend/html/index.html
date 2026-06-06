@@ -10,7 +10,6 @@
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 </head>
 <body>
-  <canvas id="bgCanvas" class="app-bg-canvas"></canvas>
   <div class="app-layout">
 
     <!-- ===== SIDEBAR ===== -->
@@ -254,58 +253,6 @@
   </div>
 
   <script src="../js/main.js"></script>
-  <script>
-    // Nền particle network (đồng bộ hiệu ứng với trang login)
-    (function () {
-      const canvas = document.getElementById('bgCanvas');
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      const FOV = 500, NUM = 160;
-      let W, H, particles, rotX = 0, rotY = 0;
-      function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
-      function init() {
-        resize();
-        particles = Array.from({ length: NUM }, () => ({
-          x: (Math.random() - 0.5) * W * 2, y: (Math.random() - 0.5) * H * 2, z: (Math.random() - 0.5) * 800,
-          vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4, vz: (Math.random() - 0.5) * 0.4,
-        }));
-      }
-      const rotateY = (x, z, a) => ({ x: x * Math.cos(a) - z * Math.sin(a), z: x * Math.sin(a) + z * Math.cos(a) });
-      const rotateX = (y, z, a) => ({ y: y * Math.cos(a) - z * Math.sin(a), z: y * Math.sin(a) + z * Math.cos(a) });
-      const project = (x, y, z) => { const s = FOV / (FOV + z + 400); return { sx: x * s + W / 2, sy: y * s + H / 2, scale: s }; };
-      function draw() {
-        ctx.clearRect(0, 0, W, H);
-        rotY += 0.0007; rotX += 0.0003;
-        const projected = particles.map(p => {
-          p.x += p.vx; p.y += p.vy; p.z += p.vz;
-          if (p.x < -W) p.x = W; if (p.x > W) p.x = -W;
-          if (p.y < -H) p.y = H; if (p.y > H) p.y = -H;
-          if (p.z < -400) p.z = 400; if (p.z > 400) p.z = -400;
-          const ry = rotateY(p.x, p.z, rotY); const rx = rotateX(p.y, ry.z, rotX);
-          return { ...project(ry.x, rx.y, rx.z), pz: p.z };
-        }).sort((a, b) => b.pz - a.pz);
-        for (let i = 0; i < projected.length; i++) {
-          const { sx, sy, scale } = projected[i];
-          const r = Math.max(0.3, 2.4 * scale);
-          const alpha = Math.min(0.6, 0.1 + 0.5 * scale);
-          ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(79,142,247,${alpha})`; ctx.fill();
-          for (let j = i + 1; j < projected.length; j++) {
-            const { sx: qx, sy: qy, scale: qs } = projected[j];
-            const dx = sx - qx, dy = sy - qy, dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < 150) {
-              ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(qx, qy);
-              ctx.strokeStyle = `rgba(79,142,247,${0.3 * ((scale + qs) / 2) * (1 - dist / 150)})`;
-              ctx.lineWidth = ((scale + qs) / 2); ctx.stroke();
-            }
-          }
-        }
-        requestAnimationFrame(draw);
-      }
-      window.addEventListener('resize', resize);
-      init(); draw();
-    })();
-  </script>
 </body>
 </html>
 

@@ -6,9 +6,7 @@ on:
   pull_request:
 
 jobs:
-  # ============================================
   # Job 1: Lint — Ruff (non-blocking: repo chưa từng lint)
-  # ============================================
   lint:
     name: Lint (Ruff)
     runs-on: ubuntu-latest
@@ -18,14 +16,12 @@ jobs:
       - name: Ruff check
         run: uvx ruff check .
 
-  # ============================================
-  # Job 2: Test — uv + pytest (chỉ unit test, không cần LLM API)
-  # ============================================
+  # Job 2: Test — uv + pytest 
   test:
     name: Unit tests
     runs-on: ubuntu-latest
     services:
-      # pgvector phục vụ cả DB chính lẫn vector store (code nối DB lúc import).
+      # pgvector phục vụ cả DB chính lẫn vector store
       postgres:
         image: pgvector/pgvector:pg17
         env:
@@ -51,8 +47,7 @@ jobs:
       VECTOR_PG_DB: a45839
       VECTOR_PG_USER: a45839
       VECTOR_PG_PASSWORD: a45839
-      # Unit test đã mock nên không gọi API thật — chỉ cần key khác rỗng để
-      # OpenAI client khởi tạo được lúc import (dùng secret nếu có, không thì dummy).
+
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'sk-or-ci-dummy' }}
     steps:
       - uses: actions/checkout@v4
@@ -72,9 +67,7 @@ jobs:
       - name: Chạy unit test (bỏ qua test integration)
         run: uv run pytest -m "not integration" --cov-fail-under=0
 
-  # ============================================
   # Job 3: Build — kiểm tra Dockerfile build được (không push)
-  # ============================================
   build:
     name: Build Docker image
     runs-on: ubuntu-latest
@@ -93,9 +86,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ============================================
   # Job 4: Deploy — Render hook (chỉ nhánh main, sau khi build pass)
-  # ============================================
   deploy:
     name: Deploy lên Render
     runs-on: ubuntu-latest
