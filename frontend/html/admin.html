@@ -19,7 +19,11 @@
       </div>
 
       <nav class="admin-nav">
-        <button class="admin-nav-item active" data-tab="users">
+        <button class="admin-nav-item active" data-tab="overview">
+          <svg viewBox="0 0 24 24" width="15" height="15"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+          Tổng quan
+        </button>
+        <button class="admin-nav-item" data-tab="users">
           <svg viewBox="0 0 24 24" width="15" height="15"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           Tài khoản
         </button>
@@ -40,8 +44,30 @@
     <!-- Main content -->
     <main class="admin-main">
 
+      <!-- Overview / Dashboard tab -->
+      <div class="admin-tab" id="tab-overview">
+        <div class="admin-tab-header">
+          <h2 class="admin-section-title">Tổng quan</h2>
+        </div>
+
+        <div class="dash-kpi-grid" id="dashKpi">
+          <div class="dash-kpi-card"><div class="dash-kpi-value">…</div><div class="dash-kpi-label">Đang tải</div></div>
+        </div>
+
+        <div class="dash-chart-row">
+          <div class="dash-chart-card"><div id="chartUsersByDay" class="dash-chart"></div></div>
+          <div class="dash-chart-card"><div id="chartSessionsByDay" class="dash-chart"></div></div>
+        </div>
+
+        <div class="dash-chart-row dash-chart-row-3">
+          <div class="dash-chart-card"><div id="chartTopUsers" class="dash-chart"></div></div>
+          <div class="dash-chart-card"><div id="chartRoleRatio" class="dash-chart"></div></div>
+          <div class="dash-chart-card"><div id="chartSessionsByHour" class="dash-chart"></div></div>
+        </div>
+      </div>
+
       <!-- Users tab -->
-      <div class="admin-tab" id="tab-users">
+      <div class="admin-tab" id="tab-users" hidden>
         <div class="admin-tab-header">
           <h2 class="admin-section-title">Tài khoản</h2>
           <input type="text" id="userFilterInput" class="admin-filter-input" placeholder="Tìm theo username..." />

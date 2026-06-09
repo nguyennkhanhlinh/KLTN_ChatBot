@@ -5,7 +5,7 @@ import yaml
 def load_chart_labels() -> str:
     path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        "schema", "chart_labels.yaml",
+        "label", "chart_labels.yaml",
     )
     with open(path, encoding="utf-8") as f:
         data = yaml.safe_load(f)

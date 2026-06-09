@@ -70,9 +70,13 @@ const MODELS = [
   { id: 'gpt-4.1-mini',               label: 'GPT-4.1 Mini' },
   { id: 'o4-mini',                    label: 'O4 Mini' },
   { id: 'deepseek/deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
-  { id: 'qwen/qwen3.5-flash-02-23',   label: 'Qwen3.5 Flash' },
+  { id: 'mistralai/mistral-small-2603', label: 'Mistral Small 4' },
 ];
 let selectedModel = localStorage.getItem('chatbot:model') || 'gpt-4.1-mini';
+if (!MODELS.some(m => m.id === selectedModel)) {
+  selectedModel = 'gpt-4.1-mini';
+  localStorage.setItem('chatbot:model', selectedModel);
+}
 
 const modelSelectorBtn = document.getElementById('modelSelectorBtn');
 const modelDropdown    = document.getElementById('modelDropdown');
@@ -102,7 +106,6 @@ modelDropdown.addEventListener('click', (e) => {
   modelDropdown.hidden = true;
   modelSelectorBtn.classList.remove('open');
 });
-newSession
 document.addEventListener('click', (e) => {
   if (!modelSelectorBtn.contains(e.target) && !modelDropdown.contains(e.target)) {
     modelDropdown.hidden = true;
@@ -363,6 +366,22 @@ function loadSession(id) {
   });
   chatArea.classList.remove('welcome-mode');
   renderHistoryList();
+  _restoreFeedback(s.id);
+}
+
+// Tô lại màu like/dislike đã lưu cho phiên (sau khi đã render xong messages)
+async function _restoreFeedback(sessionId) {
+  try {
+    const res = await fetch(`${API}/feedback/${encodeURIComponent(sessionId)}`, { headers: authHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    for (const fb of data.feedback || []) {
+      const bar = document.querySelector(`.msg-actions[data-key="${fb.msg_key}"]`);
+      if (!bar) continue;
+      if (fb.rating === 'like') bar.querySelector('.msg-like')?.classList.add('active');
+      else if (fb.rating === 'dislike') bar.querySelector('.msg-dislike')?.classList.add('active');
+    }
+  } catch (e) { /* im lặng */ }
 }
 
 async function sendMessage() {
@@ -449,11 +468,18 @@ function appendBotMessage(html) {
 }
 
 function typeBotMessage(rawText, charsPerTick = 2, intervalMs = 15) {
+  rawText = String(rawText || '').trim();
+  if (!rawText) {
+    appendBotMessage('Mình chưa có câu trả lời phù hợp.');
+    return Promise.resolve();
+  }
+
   return new Promise(resolve => {
     const div = document.createElement('div');
     div.className = 'message bot-message';
     const avatarBot = `<div class="msg-avatar bot-avatar"><img src="../assets/images/robot.png" alt="Bot" /></div>`;
-    div.innerHTML = `${avatarBot}<div class="message-bubble"><span class="stream-text"></span><span class="stream-cursor">▍</span></div>`;
+    const key = _nextMsgKey();
+    div.innerHTML = `${avatarBot}<div class="msg-col"><div class="message-bubble"><span class="stream-text"></span><span class="stream-cursor">▍</span></div></div>`;
     messagesContainer.appendChild(div);
     const textEl = div.querySelector('.stream-text');
     const cursorEl = div.querySelector('.stream-cursor');
@@ -469,6 +495,7 @@ function typeBotMessage(rawText, charsPerTick = 2, intervalMs = 15) {
         clearInterval(id);
         textEl.innerHTML = finalHtml;
         cursorEl.remove();
+        div.querySelector('.msg-col').insertAdjacentHTML('beforeend', _botActions(key));
         const s = sessions.find(x => x.id === activeId);
         if (s) s.messages.push({ role: 'bot', html: finalHtml });
         resolve();
@@ -489,6 +516,127 @@ function parseMarkdown(text) {
     .replace(/[-•]\s+/g, '&nbsp;&nbsp;• ');
 }
 
+// Định danh tin nhắn để gắn feedback: session hiện tại + chỉ số theo thứ tự DOM
+function _nextMsgKey() {
+  return `${activeId}#${messagesContainer.querySelectorAll('.message').length}`;
+}
+
+const FB_REASONS = [
+  { code: 'wrong_data',  label: 'Sai số liệu' },
+  { code: 'irrelevant',  label: 'Không liên quan' },
+  { code: 'incomplete',  label: 'Thiếu thông tin' },
+  { code: 'unclear',     label: 'Khó hiểu' },
+];
+
+const _ICON_COPY = `<svg class="icon-copy" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><svg class="icon-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+const _ICON_LIKE = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>`;
+const _ICON_DISLIKE = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>`;
+
+const _COPY_BTN = `<button class="msg-action msg-copy" title="Sao chép" onclick="
+  const el = this.closest('.msg-col').querySelector('.message-bubble');
+  const text = el ? el.innerText.trim() : '';
+  navigator.clipboard.writeText(text).then(() => { this.classList.add('copied'); setTimeout(() => this.classList.remove('copied'), 1500); });
+">${_ICON_COPY}</button>`;
+
+// firstBtn: nút copy (text) hoặc nút tải ảnh (chart). msgKey: định danh tin.
+function _actionBar(msgKey, firstBtn) {
+  return `<div class="msg-actions" data-key="${msgKey}">
+    ${firstBtn}
+    <button class="msg-action msg-like" title="Hữu ích" onclick="_fbLike(this)">${_ICON_LIKE}</button>
+    <button class="msg-action msg-dislike" title="Chưa tốt" onclick="_fbDislike(this)">${_ICON_DISLIKE}</button>
+  </div>`;
+}
+
+function _botActions(msgKey) { return _actionBar(msgKey, _COPY_BTN); }
+
+// Gửi feedback lên backend (rating=null để bỏ đánh giá). Im lặng nếu lỗi.
+function _sendFeedback(msgKey, rating, reason = null, comment = null) {
+  fetch(`${API}/feedback`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ session_id: String(activeId), msg_key: msgKey, rating, reason, comment }),
+  }).catch(() => {});
+}
+
+function _fbLike(btn) {
+  const bar = btn.closest('.msg-actions');
+  const key = bar.dataset.key;
+  const like = bar.querySelector('.msg-like');
+  const dislike = bar.querySelector('.msg-dislike');
+  _closeReasons(bar);
+  if (like.classList.contains('active')) {
+    like.classList.remove('active');
+    _sendFeedback(key, null);
+  } else {
+    like.classList.add('active');
+    dislike.classList.remove('active');
+    _sendFeedback(key, 'like');
+  }
+}
+
+function _fbDislike(btn) {
+  const bar = btn.closest('.msg-actions');
+  const key = bar.dataset.key;
+  const like = bar.querySelector('.msg-like');
+  const dislike = bar.querySelector('.msg-dislike');
+  like.classList.remove('active');
+  if (dislike.classList.contains('active')) {
+    dislike.classList.remove('active');
+    _closeReasons(bar);
+    _sendFeedback(key, null);
+  } else {
+    dislike.classList.add('active');
+    _sendFeedback(key, 'dislike');     // dislike ghi nhận ngay, lý do tùy chọn
+    _openReasons(bar, key);
+  }
+}
+
+function _closeReasons(bar) {
+  const next = bar.nextElementSibling;
+  if (next && next.classList.contains('fb-reasons')) next.remove();
+}
+
+function _openReasons(bar, key) {
+  _closeReasons(bar);
+  const panel = document.createElement('div');
+  panel.className = 'fb-reasons';
+  panel.dataset.key = key;
+  panel.innerHTML =
+    `<span class="fb-label">Vì sao chưa tốt?</span>` +
+    FB_REASONS.map(r => `<button class="fb-chip" onclick="_pickReason(this,'${r.code}')">${r.label}</button>`).join('') +
+    `<button class="fb-chip fb-other" onclick="_otherReason(this)">Khác</button>`;
+  bar.insertAdjacentElement('afterend', panel);
+}
+
+function _pickReason(chip, code) {
+  const panel = chip.closest('.fb-reasons');
+  panel.querySelectorAll('.fb-chip').forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+  const input = panel.querySelector('.fb-other-input');
+  if (input) input.remove();
+  _sendFeedback(panel.dataset.key, 'dislike', code);
+}
+
+function _otherReason(chip) {
+  const panel = chip.closest('.fb-reasons');
+  panel.querySelectorAll('.fb-chip').forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+  if (panel.querySelector('.fb-other-input')) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'fb-other-input';
+  wrap.innerHTML = `<input type="text" placeholder="Nhập góp ý..." /><button>Gửi</button>`;
+  panel.appendChild(wrap);
+  const input = wrap.querySelector('input');
+  const sendBtn = wrap.querySelector('button');
+  input.focus();
+  const send = () => {
+    _sendFeedback(panel.dataset.key, 'dislike', 'other', input.value.trim());
+    sendBtn.textContent = 'Đã gửi';
+  };
+  sendBtn.onclick = send;
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+}
+
 function _renderMessage(role, html, alreadyParsed = false) {
   const div = document.createElement('div');
   div.className = `message ${role}-message`;
@@ -497,25 +645,11 @@ function _renderMessage(role, html, alreadyParsed = false) {
   const content = role === 'bot'
     ? (alreadyParsed ? html : parseMarkdown(html))
     : html.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
-  const copyBtn = `<button class="msg-copy-btn" title="Sao chép" onclick="
-    const el = this.closest('.message-bubble');
-    const text = el ? el.innerText.trim() : '';
-    navigator.clipboard.writeText(text).then(() => {
-      this.classList.add('copied');
-      setTimeout(() => this.classList.remove('copied'), 1500);
-    });
-  ">
-    <svg class="icon-copy" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-    </svg>
-    <svg class="icon-check" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-      <polyline points="20 6 9 17 4 12"/>
-    </svg>
-  </button>`;
   if (role === 'user') {
     div.innerHTML = `<div class="message-bubble">${content}</div>${avatarUser}`;
   } else {
-    div.innerHTML = `${avatarBot}<div class="message-bubble">${content}${copyBtn}</div>`;
+    const key = _nextMsgKey();
+    div.innerHTML = `${avatarBot}<div class="msg-col"><div class="message-bubble">${content}</div>${_botActions(key)}</div>`;
   }
   messagesContainer.appendChild(div);
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -588,17 +722,17 @@ function _renderChart(data) {
     marginL = 60; marginB = 60;
   }
 
-  const downloadBtn = `<button class="chart-download-btn" onclick="Plotly.downloadImage('${chartId}', {format:'png', width:900, height:500, filename:'bieu_do'})" title="Tải ảnh">
-    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  const downloadBtn = `<button class="msg-action" title="Tải ảnh" onclick="Plotly.downloadImage('${chartId}', {format:'png', width:900, height:500, filename:'bieu_do'})">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
       <polyline points="7 10 12 15 17 10"/>
       <line x1="12" y1="15" x2="12" y2="3"/>
     </svg>
   </button>`;
-  const footer = data.tong_quan
-    ? `<div class="chart-footer"><span class="chart-insight">${data.tong_quan}</span>${downloadBtn}</div>`
-    : `<div class="chart-footer">${downloadBtn}</div>`;
-  div.innerHTML = `${avatarBot}<div class="message-bubble chart-bubble"><div id="${chartId}" style="width:100%;height:${chartH}px;"></div>${footer}</div>`;
+  const key = _nextMsgKey();
+  const chartActions = _actionBar(key, downloadBtn);
+  const insight = data.tong_quan ? `<div class="chart-insight">${data.tong_quan}</div>` : '';
+  div.innerHTML = `${avatarBot}<div class="msg-col chart-col"><div class="message-bubble chart-bubble"><div id="${chartId}" style="width:100%;height:${chartH}px;"></div>${insight}</div>${chartActions}</div>`;
   messagesContainer.appendChild(div);
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
 

@@ -1,13 +1,8 @@
-"""Test retrieve_context — semantic search + cross-encoder rerank.
-
-vector_store và _reranker được mock (fixture mock_rag) để kiểm tra LOGIC lọc:
-threshold cosine, bù candidate, lọc theo ma_codes, dedupe, rerank, top-k.
-Tool dùng response_format="content_and_artifact" -> gọi .func(...) để lấy tuple
-(serialized_text, danh_sach_documents).
-"""
+import pytest
 from langchain_core.documents import Document
 
-from src.tools.retrieve_context import retrieve_context
+import src.tools.retrieve_context as rc
+from src.tools.retrieve_context import OpenRouterReranker, retrieve_context
 
 
 def _doc(ma_code, text="mo ta"):
@@ -38,7 +33,6 @@ class TestRetrieveContext:
         vs.results = [(d1, 0.9), (d2, 0.7), (d3, 0.5)]  # d3 dưới ngưỡng 0.6
         rr.scores = [0.1, 0.9, 0.5]  # theo thứ tự deduped [d1, d2, d3]
         content, artifact = retrieve_context.func(query="q", k=2)
-        # rerank giảm dần: d2(0.9) > d3(0.5) > d1(0.1); lấy top 2
         assert _codes(artifact) == ["2", "3"]
         assert "Content:" in content
 
@@ -46,7 +40,6 @@ class TestRetrieveContext:
         vs, rr = mock_rag
         d_in1, d_in2, d_out = _doc("1"), _doc("2"), _doc("999")
         vs.results = [(d_in1, 0.9), (d_in2, 0.8), (d_out, 0.95)]
-        # truyền đủ nhiều mã để pool >= số candidate -> d_out được fetch rồi mới bị lọc
         content, artifact = retrieve_context.func(
             query="q",
             ma_codes=[str(i) for i in range(1, 11)],  # 1..10, không có 999
@@ -69,3 +62,65 @@ class TestRetrieveContext:
         content, artifact = retrieve_context.func(query="q")
         assert len(artifact) == 1
         assert _codes(artifact) == ["5"]
+
+class _FakeResp:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._payload
+
+
+class TestOpenRouterReranker:
+    def test_predict_empty_pairs_no_http(self, monkeypatch):
+        def _boom(*a, **k):
+            raise AssertionError("không được gọi requests.post khi pairs rỗng")
+
+        monkeypatch.setattr(rc.requests, "post", _boom)
+        assert OpenRouterReranker().predict([]) == []
+
+    def test_predict_maps_scores_by_index(self, monkeypatch):
+        captured = {}
+
+        def fake_post(url, headers=None, json=None, timeout=None):
+            captured["url"] = url
+            captured["json"] = json
+            captured["headers"] = headers
+            # results trả về đảo thứ tự index -> hàm phải map đúng về vị trí gốc
+            return _FakeResp({"results": [
+                {"index": 1, "relevance_score": 0.8},
+                {"index": 0, "relevance_score": 0.3},
+            ]})
+
+        monkeypatch.setattr(rc.requests, "post", fake_post)
+        scores = OpenRouterReranker(model="m").predict([("q", "docA"), ("q", "docB")])
+
+        assert scores == [0.3, 0.8]                       # map đúng theo index
+        assert captured["url"].endswith("/rerank")
+        assert captured["json"]["query"] == "q"
+        assert captured["json"]["documents"] == ["docA", "docB"]
+        assert captured["json"]["model"] == "m"
+
+    def test_predict_missing_index_defaults_zero(self, monkeypatch):
+        # API chỉ chấm 1 doc -> doc còn lại giữ điểm mặc định 0.0
+        def fake_post(url, headers=None, json=None, timeout=None):
+            return _FakeResp({"results": [{"index": 0, "relevance_score": 0.9}]})
+
+        monkeypatch.setattr(rc.requests, "post", fake_post)
+        scores = OpenRouterReranker().predict([("q", "a"), ("q", "b")])
+        assert scores == [0.9, 0.0]
+
+    def test_predict_raises_on_http_error(self, monkeypatch):
+        class _ErrResp:
+            def raise_for_status(self):
+                raise RuntimeError("502 Bad Gateway")
+
+            def json(self):
+                return {}
+
+        monkeypatch.setattr(rc.requests, "post", lambda *a, **k: _ErrResp())
+        with pytest.raises(RuntimeError):
+            OpenRouterReranker().predict([("q", "a")])

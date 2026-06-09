@@ -1,7 +1,3 @@
-"""Test 3 tool đụng PostgreSQL — DB được mock bằng fixture mock_db.
-
-execute_sql / get_schema / get_unique_values đều dùng Database.get_conn().
-"""
 import json
 
 from src.tools.execute_sql import execute_sql
@@ -9,9 +5,7 @@ from src.tools.get_schema import get_schema
 from src.tools.get_unique_value import get_unique_values
 
 
-# =========================================================================== #
 # execute_sql
-# =========================================================================== #
 class TestExecuteSql:
     def test_blocks_drop(self, mock_db):
         out = execute_sql.invoke({"sql_query": "DROP TABLE properties"})
@@ -135,9 +129,7 @@ class TestExecuteSql:
         assert "connection lost" in out
 
 
-# =========================================================================== #
 # get_schema
-# =========================================================================== #
 class TestGetSchema:
     def test_returns_columns(self, mock_db):
         mock_db.fetchall_results = [[
@@ -160,9 +152,7 @@ class TestGetSchema:
         assert "Lỗi khi lấy schema" in out
 
 
-# =========================================================================== #
 # get_unique_values
-# =========================================================================== #
 class TestGetUniqueValues:
     def test_empty_columns(self, mock_db):
         out = get_unique_values.invoke({"table_name": "properties", "columns": []})

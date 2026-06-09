@@ -1,8 +1,6 @@
 services:
-  # ============================================
   # PostgreSQL + pgvector — DB chính + vector store cho RAG
   # (BẮT BUỘC pgvector: init-db.sql chạy CREATE EXTENSION vector)
-  # ============================================
   db:
     image: pgvector/pgvector:pg17
     container_name: kltn-db
@@ -29,9 +27,7 @@ services:
           cpus: "1.0"
     restart: unless-stopped
 
-  # ============================================
   # Backend — FastAPI + LangGraph (build từ Dockerfile)
-  # ============================================
   backend:
     build:
       context: .
@@ -56,28 +52,24 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s        # embedding/rerank/LLM đều qua API, không load model local
+      start_period: 30s       
     networks:
       - kltn-network
     deploy:
       resources:
         limits:
-          memory: 1G           # chỉ FastAPI + LangGraph, không còn torch/model local
+          memory: 1G           
           cpus: "1.0"
         reservations:
           memory: 512M
     restart: unless-stopped
 
-# ============================================
 # Named volumes — lưu dữ liệu Postgres bền vững
-# ============================================
 volumes:
   postgres-data:
     driver: local
 
-# ============================================
 # Network — cách ly các service
-# ============================================
 networks:
   kltn-network:
     driver: bridge

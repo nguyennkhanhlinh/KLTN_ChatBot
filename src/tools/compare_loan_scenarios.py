@@ -24,6 +24,10 @@ class CompareScenariosInput(BaseModel):
         default=None,
         description="Danh sách lãi suất tùy chỉnh khi compare_by='rate'. Mặc định: [7, 8, 9, 10, 11, 12]",
     )
+    custom_terms: Optional[List[int]] = Field(
+        default=None,
+        description="Danh sách thời hạn vay tùy chỉnh (năm) khi compare_by='term'. Mặc định: [10, 15, 20, 25, 30]",
+    )
 
 
 def _pmt(loan_ty: float, rate_pct: float, term_years: int) -> float:
@@ -46,6 +50,7 @@ def compare_loan_scenarios(
     interest_rate: Optional[float] = None,
     loan_term_years: Optional[int] = None,
     custom_rates: Optional[List[float]] = None,
+    custom_terms: Optional[List[int]] = None,
 ) -> str:
     """So sánh nhiều kịch bản vay BĐS theo thời hạn hoặc lãi suất. Trả về JSON chart."""
     loan = target_price - equity
@@ -63,7 +68,8 @@ def compare_loan_scenarios(
                 {"error": "Cần cung cấp interest_rate khi compare_by='term'."},
                 ensure_ascii=False,
             )
-        for t in [10, 15, 20, 25, 30]:
+        terms = custom_terms or [10, 15, 20, 25, 30]
+        for t in terms:
             p = _pmt(loan, interest_rate, t)
             ti = _total_interest(loan, p, t)
             scenarios.append({

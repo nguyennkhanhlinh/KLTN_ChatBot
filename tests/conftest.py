@@ -1,9 +1,3 @@
-"""Pytest fixtures dùng chung cho toàn bộ test API.
-
-pytest tự nạp file này — mọi test trong tests/ dùng được các fixture dưới đây
-mà KHÔNG cần import. Lưu ý: client dùng ASGITransport nên KHÔNG chạy lifespan
-của app (không init DB, không load model, không build graph thật).
-"""
 import pytest
 from httpx import ASGITransport, AsyncClient
 from langchain_core.messages import AIMessage, HumanMessage
@@ -20,9 +14,7 @@ async def client():
         yield ac
 
 
-# --------------------------------------------------------------------------- #
-# Auth: tạo JWT thật (get_current_user chỉ decode token, không đụng DB)
-# --------------------------------------------------------------------------- #
+
 @pytest.fixture
 def user_token():
     """JWT của một user thường (id=1, username=alice, role=user)."""
@@ -45,9 +37,6 @@ def admin_headers(admin_token):
     return {"Authorization": f"Bearer {admin_token}"}
 
 
-# --------------------------------------------------------------------------- #
-# Mock LLM: thay supervisor graph + bỏ ghi DB cho /chat, /chat/stream
-# --------------------------------------------------------------------------- #
 class _ChatHandle:
     """Điều khiển hành vi của supervisor giả trong mỗi test.
 
@@ -78,18 +67,22 @@ def mock_chat(monkeypatch):
                 raise handle.exc
             return {"messages": handle.messages}
 
+        async def astream(self, state, config=None, *, stream_mode=None, context=None):
+            if handle.exc is not None:
+                raise handle.exc
+            # mô phỏng stream_mode="values": phát 1 snapshot state cuối
+            yield {"messages": handle.messages}
+
     monkeypatch.setattr("backend.main.build_supervisor", lambda *a, **k: _FakeSupervisor())
 
     async def _noop_register(*a, **k):
         return None
 
     monkeypatch.setattr("backend.main._register_session", _noop_register)
+    monkeypatch.setattr("backend.main._log_chat", _noop_register)
     return handle
 
 
-# --------------------------------------------------------------------------- #
-# Fake DB: giả lập checkpointer/Postgres cho các endpoint cần DB
-# --------------------------------------------------------------------------- #
 class _FakeCursor:
     def __init__(self):
         self.fetchone_results = []   # hàng đợi kết quả cho fetchone()

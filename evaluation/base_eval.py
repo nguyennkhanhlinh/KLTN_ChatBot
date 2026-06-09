@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).resolve().parents[2]))
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -27,10 +27,10 @@ from langsmith import Client
 from langsmith.evaluation import evaluate
 
 from src.agents.Supervisor_agent import build_supervisor
-from evaluation.end_to_end.dataset_e2e import DATASET_NAME, EXAMPLES
-from evaluation.quality.evaluators_strict import ALL_EVALUATORS
+from evaluation.dataset_e2e import DATASET_NAME, EXAMPLES
+from evaluation.evaluators_strict import QUALITY_EVALUATORS
 
-DEFAULT_EVAL_MODELS = ["gpt-4.1-mini", "o4-mini"]
+DEFAULT_EVAL_MODELS = ["gpt-4.1-mini"]
 DEFAULT_LANGSMITH_PROJECT = "KLTN_ChatBot"
 QUALITY_KEYS = ["groundedness", "relevance", "completeness", "clarity"]
 _RETRY_EXCEPTIONS = ("RateLimitError", "APIStatusError", "InternalServerError")
@@ -67,28 +67,35 @@ async def _with_retry(coro_fn, *args, label: str = ""):
             await asyncio.sleep(wait)
 
 
+def _extract_supervisor_outputs(messages: list) -> tuple[str, dict]:
+    """response + tool_outputs từ messages của supervisor."""
+    response = messages[-1].content if messages else ""
+    tool_outputs: dict = {}
+    for msg in messages:
+        tool_name = getattr(msg, "name", None)
+        if tool_name and msg.content:
+            try:
+                tool_outputs[tool_name] = json.loads(msg.content)
+            except (json.JSONDecodeError, TypeError):
+                tool_outputs[tool_name] = msg.content
+    return response, tool_outputs
+
+
 def _make_target(supervisor, model_name: str):
     def target(inputs: dict) -> dict:
         question = inputs["question"]
         print(f"[eval:{model_name}] {question[:70]}...")
 
         async def _invoke() -> dict:
-            result = await _with_retry(
+            sup_result = await _with_retry(
                 supervisor.ainvoke,
                 {"messages": [HumanMessage(content=question)]},
                 {"configurable": {"thread_id": f"q_{abs(hash(question))}"}},
                 label=f"supervisor/{model_name}",
             )
-            messages = result.get("messages", [])
-            response = messages[-1].content if messages else ""
-            tool_outputs: dict = {}
-            for msg in messages:
-                tool_name = getattr(msg, "name", None)
-                if tool_name and msg.content:
-                    try:
-                        tool_outputs[tool_name] = json.loads(msg.content)
-                    except (json.JSONDecodeError, TypeError):
-                        tool_outputs[tool_name] = msg.content
+            response, tool_outputs = _extract_supervisor_outputs(
+                sup_result.get("messages", [])
+            )
             return {"response": response, "tool_outputs": tool_outputs}
 
         return asyncio.run(_invoke())
@@ -105,7 +112,6 @@ def upload_dataset(client: Client) -> str:
     dataset = client.create_dataset(DATASET_NAME)
     client.create_examples(
         inputs=[e["inputs"] for e in EXAMPLES],
-        outputs=[e["outputs"] for e in EXAMPLES],
         dataset_id=dataset.id,
     )
     print(f"[dataset] Đã tạo '{DATASET_NAME}' với {len(EXAMPLES)} examples")
@@ -117,11 +123,6 @@ def _avg(lst: list):
     return sum(lst) / len(lst) if lst else None
 
 
-def _fmt5(lst: list) -> str:
-    v = _avg(lst)
-    return f"{v * 5:.2f}" if v is not None else "—"
-
-
 def _collect_results(results_iter) -> dict:
     overall = {m: [] for m in QUALITY_KEYS}
     for r in list(results_iter):
@@ -129,37 +130,23 @@ def _collect_results(results_iter) -> dict:
         for fb in feedbacks:
             key = getattr(fb, "key", None)
             score = getattr(fb, "score", None)
-            if key in QUALITY_KEYS and score is not None:
+            if score is None:
+                continue
+            if key in QUALITY_KEYS:
                 overall[key].append(float(score))
     return overall
 
 
-def _print_report(model_name: str, overall: dict) -> None:
-    W = 62
-    print("\n" + "=" * W)
-    print(f"KẾT QUẢ QUALITY EVAL — {model_name}")
-    print("=" * W)
-    for key in QUALITY_KEYS:
-        scores = overall[key]
-        avg = _avg(scores)
-        val = f"{avg * 5:.2f}/5" if avg is not None else "—"
-        print(f"  {key:<14}: {val}  (n={len(scores)})")
-    all_scores = [s for lst in overall.values() for s in lst]
-    avg_all = _avg(all_scores)
-    print("-" * W)
-    print(f"  {'QAvg':<14}: {avg_all * 5:.2f}/5" if avg_all else f"  {'QAvg':<14}: —")
-
-
 # Main
 def run_model_eval(client: Client, model_name: str) -> dict:
-    print(f"\n[startup] Quality eval model={model_name} ({len(EXAMPLES)} cases)...")
+    print(f"\n[startup] Eval model={model_name} ({len(EXAMPLES)} cases)...")
     supervisor = build_supervisor(model=model_name, checkpointer=MemorySaver())
     target = _make_target(supervisor, model_name)
 
     results_iter = evaluate(
         target,
         data=DATASET_NAME,
-        evaluators=ALL_EVALUATORS,
+        evaluators=QUALITY_EVALUATORS,
         experiment_prefix=f"quality_{model_name}",
         metadata={"model": model_name, "eval_type": "quality_strict"},
         max_concurrency=1,
@@ -167,8 +154,6 @@ def run_model_eval(client: Client, model_name: str) -> dict:
     )
 
     overall = _collect_results(results_iter)
-    _print_report(model_name, overall)
-
     all_scores = [s for lst in overall.values() for s in lst]
     return {
         "model": model_name,
@@ -177,8 +162,8 @@ def run_model_eval(client: Client, model_name: str) -> dict:
     }
 
 
-def main():
-    models = get_eval_models()
+def main(models: list[str] | None = None):
+    models = models or get_eval_models()
     print(f"[startup] Models: {', '.join(models)}")
 
     client = Client()
@@ -186,21 +171,9 @@ def main():
     print(f"[startup] LangSmith project: {project_name}")
     upload_dataset(client)
 
-    reports = [run_model_eval(client, m) for m in models]
+    for m in models:
+        run_model_eval(client, m)
 
-    W = 70
-    print("\n" + "=" * W)
-    print("TỔNG HỢP — QUALITY EVAL (rubric strict #1 #4)")
-    print("=" * W)
-    print(f"{'Model':<16} {'Ground':>8} {'Relev':>8} {'Compl':>8} {'Clarity':>8} {'QAvg':>8}")
-    print("-" * W)
-    for r in reports:
-        vals = [r["by_metric"].get(m, 0) for m in QUALITY_KEYS]
-        print(
-            f"  {r['model']:<14}"
-            + "".join(f"{v:8.2f}" for v in vals)
-            + f"{r['quality_avg']:8.2f}"
-        )
     print("\nLangSmith: https://smith.langchain.com")
 
 

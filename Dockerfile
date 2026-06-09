@@ -1,6 +1,4 @@
-# ============================================
 # Stage 1: Builder — cài dependencies bằng uv
-# ============================================
 FROM python:3.12-slim AS builder
 
 WORKDIR /app
@@ -25,16 +23,15 @@ COPY pyproject.toml uv.lock ./
 # không cài chính project (--no-install-project) vì source copy ở stage sau
 RUN uv sync --frozen --no-dev --no-install-project
 
-# ============================================
-# Stage 2: Production — image cuối cùng
-# ============================================
-FROM python:3.12-slim AS production
 
-# Thiết lập biến môi trường (venv của uv nằm ở /app/.venv)
+# Stage 2: Production — image cuối cùng
+FROM python:3.12-slim AS production
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH" \
-    PORT=8000
+    PORT=8000 \
+    LANGCHAIN_TRACING_V2=true \
+    LANGCHAIN_PROJECT=KLTN_ChatBot
 
 WORKDIR /app
 

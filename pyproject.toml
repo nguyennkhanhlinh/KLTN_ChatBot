@@ -19,7 +19,6 @@ dependencies = [
     "pandas>=3.0.2",
     "psycopg2-binary>=2.9.12",
     "psycopg[binary]>=3.3.4",
-    "python-docx>=1.2.0",
     "python-dotenv>=1.2.2",
     "seaborn>=0.13.2",
     "selenium>=4.43.0",
@@ -27,9 +26,6 @@ dependencies = [
     "undetected-chromedriver>=3.5.5",
     "uvicorn>=0.46.0",
     "python-jose[cryptography]>=3.3.0",
-    "bcrypt>=4.0.0",
-    "fastmcp>=2.0.0",
-    "langchain-mcp-adapters>=0.1.0",
 ]
 
 [tool.uv.sources]

@@ -20,6 +20,7 @@ from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langchain_core.callbacks import AsyncCallbackHandler
 
 from rag.index import index_from_json
+from configs.llm import normalize_model_id
 from src.agents.Supervisor_agent import build_supervisor, Context
 from src.memory.short_memory import (
     make_thread_config,
@@ -99,6 +100,13 @@ class ChatRequest(BaseModel):
     session_id: str = "default"
     model: str = "gpt-4.1-mini"
 
+class FeedbackRequest(BaseModel):
+    session_id: str
+    msg_key: str
+    rating: str | None = None   
+    reason: str | None = None   
+    comment: str | None = None  
+
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -146,13 +154,25 @@ async def _get_user_by_username(username: str):
             return {"id": row[0], "username": row[1], "password": row[2], "role": row[3]}
 
 
-async def _register_session(session_id: str, user_id: int):
+async def _register_session(session_id: str, user_id: int, model: str | None = None):
     pool = get_checkpointer().conn
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                "INSERT INTO user_sessions (session_id, user_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-                (session_id, user_id),
+                "INSERT INTO user_sessions (session_id, user_id, model) VALUES (%s, %s, %s) "
+                "ON CONFLICT (session_id) DO UPDATE SET model = COALESCE(EXCLUDED.model, user_sessions.model)",
+                (session_id, user_id, model),
+            )
+
+
+async def _log_chat(user_id: int, session_id: str, model: str | None):
+    """Ghi 1 dòng mỗi lượt chat — để đếm số lượt sử dụng theo model."""
+    pool = get_checkpointer().conn
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "INSERT INTO chat_log (user_id, session_id, model) VALUES (%s, %s, %s)",
+                (user_id, session_id, model),
             )
 
 
@@ -236,6 +256,9 @@ async def me(current_user: dict = Depends(get_current_user)):
 
 _AGENT_STEPS = {
     "supervisor": "Đang phân tích yêu cầu...",
+    "analyst_agent": "Đang phân tích, thống kê dữ liệu...",
+    "finance_agent": "Đang tính toán tài chính...",
+    "recommendation_agent": "Đang tìm kiếm bất động sản phù hợp...",
 }
 
 
@@ -309,9 +332,10 @@ async def chat(req: ChatRequest, current_user: dict = Depends(get_current_user))
     }
     counter = CharacterCounter()
 
-    await _register_session(req.session_id, int(current_user["sub"]))
+    await _register_session(req.session_id, int(current_user["sub"]), req.model)
+    await _log_chat(int(current_user["sub"]), req.session_id, req.model)
 
-    supervisor = build_supervisor(model=req.model)
+    supervisor = build_supervisor(model=normalize_model_id(req.model))
     result = await supervisor.ainvoke(
         {"messages": [HumanMessage(content=req.question)]},
         {**config, "callbacks": [counter]},
@@ -338,19 +362,36 @@ async def chat_stream(req: ChatRequest, current_user: dict = Depends(get_current
         "user_id": user_id,
         "username": current_user["username"],
     }
-    await _register_session(req.session_id, int(current_user["sub"]))
-    supervisor = build_supervisor(model=req.model)
+    await _register_session(req.session_id, int(current_user["sub"]), req.model)
+    await _log_chat(int(current_user["sub"]), req.session_id, req.model)
+    supervisor = build_supervisor(model=normalize_model_id(req.model))
 
     async def generate():
         try:
             yield f"data: {json.dumps({'type': 'step', 'agent': 'supervisor', 'label': _AGENT_STEPS['supervisor']})}\n\n"
-            result = await supervisor.ainvoke(
+
+            final_msgs: list = []
+            seen_calls: set = set()  # tránh phát trùng 1 lần gọi tool (theo id)
+            async for state in supervisor.astream(
                 {"messages": [HumanMessage(content=req.question)]},
                 {**config},
+                stream_mode="values",
                 context=Context(user_id=user_id),
-            )
-            msgs = list(result.get("messages", []))
-            payload = _build_chat_payload(msgs)
+            ):
+                msgs = state.get("messages", []) if isinstance(state, dict) else []
+                if msgs:
+                    final_msgs = msgs
+                # Phát step mỗi khi Supervisor quyết định gọi 1 sub-agent (tool_call mới)
+                for m in msgs:
+                    for tc in getattr(m, "tool_calls", None) or []:
+                        name = tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", None)
+                        call_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
+                        if call_id in seen_calls or name not in _AGENT_STEPS:
+                            continue
+                        seen_calls.add(call_id)
+                        yield f"data: {json.dumps({'type': 'step', 'agent': name, 'label': _AGENT_STEPS[name]})}\n\n"
+
+            payload = _build_chat_payload(final_msgs)
             yield f"data: {json.dumps({'type': 'done', 'result': payload})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
@@ -445,6 +486,48 @@ async def _build_session_list(thread_ids: list, hidden: set) -> list:
 
 
 
+@app.post("/feedback")
+async def submit_feedback(req: FeedbackRequest, current_user: dict = Depends(get_current_user)):
+    """Lưu/đổi/bỏ đánh giá like-dislike cho 1 tin nhắn bot (upsert theo user+session+msg)."""
+    user_id = int(current_user["sub"])
+    pool = get_checkpointer().conn
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            if req.rating is None:
+                await cur.execute(
+                    "DELETE FROM message_feedback "
+                    "WHERE user_id = %s AND session_id = %s AND msg_key = %s",
+                    (user_id, req.session_id, req.msg_key),
+                )
+            else:
+                await cur.execute(
+                    "INSERT INTO message_feedback "
+                    "  (user_id, session_id, msg_key, rating, reason, comment) "
+                    "VALUES (%s, %s, %s, %s, %s, %s) "
+                    "ON CONFLICT (user_id, session_id, msg_key) DO UPDATE SET "
+                    "  rating = EXCLUDED.rating, reason = EXCLUDED.reason, "
+                    "  comment = EXCLUDED.comment, created_at = NOW()",
+                    (user_id, req.session_id, req.msg_key, req.rating, req.reason, req.comment),
+                )
+    return {"ok": True}
+
+
+@app.get("/feedback/{session_id}")
+async def get_feedback(session_id: str, current_user: dict = Depends(get_current_user)):
+    """Trả về các đánh giá đã lưu của user cho 1 phiên — để khôi phục màu like/dislike."""
+    user_id = int(current_user["sub"])
+    pool = get_checkpointer().conn
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "SELECT msg_key, rating, reason FROM message_feedback "
+                "WHERE user_id = %s AND session_id = %s",
+                (user_id, session_id),
+            )
+            rows = await cur.fetchall()
+    return {"feedback": [{"msg_key": r[0], "rating": r[1], "reason": r[2]} for r in rows]}
+
+
 @app.get("/sessions")
 async def list_sessions(current_user: dict = Depends(get_current_user)):
     """Chỉ trả về sessions của user hiện tại."""
@@ -473,9 +556,6 @@ async def get_session(thread_id: str, current_user: dict = Depends(get_current_u
 async def delete_session(thread_id: str, current_user: dict = Depends(get_current_user)):
     await hide_thread(thread_id)
     return {"ok": True}
-
-
-
 
 @app.get("/admin/users")
 async def admin_list_users(_admin: dict = Depends(get_admin_user)):
@@ -568,6 +648,111 @@ async def admin_list_sessions(_admin: dict = Depends(get_admin_user)):
             "deleted_at": hidden_map[session_id].isoformat() if is_deleted else None,
         })
     return result
+
+
+@app.get("/admin/stats")
+async def admin_stats(_admin: dict = Depends(get_admin_user)):
+    """Số liệu tổng hợp cho dashboard admin (chỉ truy vấn SQL, không duyệt checkpoint)."""
+    pool = get_checkpointer().conn
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            # KPI 
+            await cur.execute("SELECT COUNT(*) FROM users")
+            total_users = (await cur.fetchone())[0]
+            await cur.execute("SELECT COUNT(*) FROM users WHERE created_at::date = CURRENT_DATE")
+            users_today = (await cur.fetchone())[0]
+            await cur.execute("SELECT COUNT(*) FROM user_sessions")
+            total_sessions = (await cur.fetchone())[0]
+            await cur.execute("SELECT COUNT(*) FROM user_sessions WHERE created_at::date = CURRENT_DATE")
+            sessions_today = (await cur.fetchone())[0]
+            await cur.execute("SELECT COUNT(DISTINCT user_id) FROM user_sessions")
+            active_users = (await cur.fetchone())[0]
+
+            # Người dùng đăng ký theo ngày (14 ngày gần nhất) 
+            await cur.execute(
+                "SELECT created_at::date AS d, COUNT(*) FROM users "
+                "WHERE created_at >= CURRENT_DATE - INTERVAL '13 days' "
+                "GROUP BY d ORDER BY d"
+            )
+            users_by_day = [[r[0].isoformat(), r[1]] for r in await cur.fetchall()]
+
+            # Phiên chat theo ngày (14 ngày gần nhất) 
+            await cur.execute(
+                "SELECT created_at::date AS d, COUNT(*) FROM user_sessions "
+                "WHERE created_at >= CURRENT_DATE - INTERVAL '13 days' "
+                "GROUP BY d ORDER BY d"
+            )
+            sessions_by_day = [[r[0].isoformat(), r[1]] for r in await cur.fetchall()]
+
+            # Top user theo số phiên 
+            await cur.execute(
+                "SELECT u.username, COUNT(us.session_id) AS c "
+                "FROM user_sessions us JOIN users u ON us.user_id = u.id "
+                "GROUP BY u.username ORDER BY c DESC LIMIT 8"
+            )
+            top_users = [[r[0], r[1]] for r in await cur.fetchall()]
+
+            # Tỷ lệ role 
+            await cur.execute("SELECT role, COUNT(*) FROM users GROUP BY role")
+            role_ratio = [[r[0], r[1]] for r in await cur.fetchall()]
+
+            # So sánh model sử dụng (số lượt chat theo model) 
+            await cur.execute(
+                "SELECT model, COUNT(*) FROM chat_log "
+                "WHERE model IS NOT NULL GROUP BY model ORDER BY 2 DESC"
+            )
+            model_usage = [[r[0], r[1]] for r in await cur.fetchall()]
+
+            # Phiên theo khung giờ trong ngày 
+            await cur.execute(
+                "SELECT EXTRACT(HOUR FROM created_at)::int AS h, COUNT(*) "
+                "FROM user_sessions GROUP BY h ORDER BY h"
+            )
+            sessions_by_hour = [[int(r[0]), r[1]] for r in await cur.fetchall()]
+
+            # Feedback like/dislike 
+            await cur.execute("SELECT rating, COUNT(*) FROM message_feedback GROUP BY rating")
+            _fb = {r[0]: r[1] for r in await cur.fetchall()}
+            like_count = _fb.get("like", 0)
+            dislike_count = _fb.get("dislike", 0)
+
+            # Lý do không hài lòng (chỉ dislike có chọn lý do)
+            await cur.execute(
+                "SELECT reason, COUNT(*) FROM message_feedback "
+                "WHERE rating = 'dislike' AND reason IS NOT NULL "
+                "GROUP BY reason ORDER BY 2 DESC"
+            )
+            dislike_reasons = [[r[0], r[1]] for r in await cur.fetchall()]
+
+
+    try:
+        from data.database import Database
+        with Database.get_conn() as c:
+            with c.cursor() as pcur:
+                pcur.execute("SELECT COUNT(*) FROM properties")
+                total_properties = pcur.fetchone()[0]
+    except Exception:
+        total_properties = 0
+
+    return {
+        "kpi": {
+            "total_users": total_users,
+            "users_today": users_today,
+            "total_sessions": total_sessions,
+            "sessions_today": sessions_today,
+            "active_users": active_users,
+            "total_properties": total_properties,
+            "like_count": like_count,
+            "dislike_count": dislike_count,
+        },
+        "users_by_day": users_by_day,
+        "sessions_by_day": sessions_by_day,
+        "top_users": top_users,
+        "role_ratio": role_ratio,
+        "model_usage": model_usage,
+        "sessions_by_hour": sessions_by_hour,
+        "dislike_reasons": dislike_reasons,
+    }
 
 
 if __name__ == "__main__":

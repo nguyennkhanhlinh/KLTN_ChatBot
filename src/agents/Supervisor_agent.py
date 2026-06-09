@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.llm.llm_client import OpenAIClient
-from src.memory.short_memory import get_checkpointer, MAX_USER_TURNS
+from src.memory.short_memory import get_checkpointer, trim_messages_to_last_user_turns
 from src.memory.long_memory import update_user_preferences, update_user_profile, get_store
 from src.prompts.Supervisor_prompt import SUPERVISOR_PROMPT
 from src.agents.Analyst_agent import create_analyst_agent
@@ -40,17 +40,19 @@ _DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 
 @before_model
 def _trim_history(state: AgentState, runtime: Runtime):
-    """Giữ tối đa MAX_USER_TURNS lượt hội thoại gần nhất trước mỗi lần gọi LLM."""
+    """Giữ tối đa MAX_USER_TURNS lượt hội thoại gần nhất trước mỗi lần gọi LLM.
+
+    Luật trim nằm ở short_memory (trim_messages_to_last_user_turns); ở đây chỉ
+    gói kết quả vào state op của LangGraph (RemoveMessage + danh sách giữ lại).
+    """
     messages = state["messages"]
-    human_indices = [i for i, m in enumerate(messages) if isinstance(m, HumanMessage)]
-    if len(human_indices) <= MAX_USER_TURNS:
+    kept = trim_messages_to_last_user_turns(messages)
+    if len(kept) == len(messages):  
         return None
-    cutoff = human_indices[-MAX_USER_TURNS]
-    kept = messages[cutoff:]
     return {"messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES), *kept]}
 
 _supervisor_cache: dict = {}
-_sentinel = object()  # default marker for checkpointer param
+_sentinel = object() 
 
 
 _CHART_KEYWORDS = frozenset({"biểu đồ", "chart", "vẽ", "pie", "visualize", "trực quan", "histogram"})
@@ -141,7 +143,9 @@ def build_supervisor(model: str = _DEFAULT_MODEL, checkpointer=_sentinel):
             return content  # không lấy được data, trả text
 
         # Bước 3: gọi LLM riêng để format chart JSON từ sql_data
-        llm = OpenAIClient(model=model, temperature=0)
+        # Reasoning model (o4-mini) chỉ chạy ở temperature=1; còn lại dùng 0 cho ổn định.
+        chart_temp = 1 if model in _REASONING_MODELS else 0
+        llm = OpenAIClient(model=model, temperature=chart_temp)
         format_msg = (
             f"Query: {query}\n\n"
             f"Dữ liệu SQL:\n{json.dumps(sql_data, ensure_ascii=False)}\n\n"
@@ -222,7 +226,7 @@ def build_supervisor(model: str = _DEFAULT_MODEL, checkpointer=_sentinel):
         if runtime.store is None:
             return "Memory chưa sẵn sàng."
         user_id = runtime.context.user_id
-        memories = await runtime.store.asearch(("users", user_id), query=query, limit=3)
+        memories = await runtime.store.asearch(("users", user_id), query=query, limit=2)
         if not memories:
             return "Chưa có thông tin về user này."
         parts: list[str] = []
@@ -286,30 +290,3 @@ def build_supervisor(model: str = _DEFAULT_MODEL, checkpointer=_sentinel):
     if use_default_cp:
         _supervisor_cache[model] = supervisor
     return supervisor
-
-
-if __name__ == "__main__":
-    import asyncio
-    from src.memory.short_memory import init_checkpointer, close_checkpointer
-
-    async def _main():
-        await init_checkpointer()
-        try:
-            app = build_supervisor()
-            config = {"configurable": {"thread_id": "test"}}
-
-            questions = [
-                "Giá trung bình BĐS theo quận tại Hà Nội?",
-                
-            ]
-
-            for q in questions:
-                print(f"\n{'='*60}\nQ: {q}\n{'='*60}")
-                result = await app.ainvoke(
-                    {"messages": [HumanMessage(content=q)]}, config
-                )
-                print(result["messages"][-1].content)
-        finally:
-            await close_checkpointer()
-
-    asyncio.run(_main())

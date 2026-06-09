@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  # Job 1: Lint — Ruff (non-blocking: repo chưa từng lint)
+  # Job 1: Lint — Ruff 
   lint:
     name: Lint (Ruff)
     runs-on: ubuntu-latest
@@ -16,12 +16,12 @@ jobs:
       - name: Ruff check
         run: uvx ruff check .
 
-  # Job 2: Test — uv + pytest 
+  # Job 2: Test — uv + pytest
   test:
-    name: Unit tests
+    name: Tests
     runs-on: ubuntu-latest
+    needs: lint                       # chỉ chạy test khi lint pass
     services:
-      # pgvector phục vụ cả DB chính lẫn vector store
       postgres:
         image: pgvector/pgvector:pg17
         env:
@@ -36,7 +36,6 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      # DB chính + vector store trỏ chung 1 service postgres ở trên.
       PG_HOST: localhost
       PG_PORT: "5432"
       PG_DB: a45839
@@ -64,10 +63,10 @@ jobs:
       - name: Cài dependencies (uv sync)
         run: uv sync --frozen
 
-      - name: Chạy unit test (bỏ qua test integration)
-        run: uv run pytest -m "not integration" --cov-fail-under=0
+      - name: Chạy test 
+        run: uv run pytest --cov-fail-under=0
 
-  # Job 3: Build — kiểm tra Dockerfile build được (không push)
+  # Job 3: Build — kiểm tra Dockerfile build được 
   build:
     name: Build Docker image
     runs-on: ubuntu-latest

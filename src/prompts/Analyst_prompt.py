@@ -79,6 +79,10 @@ KHÔNG được viết SQL dựa trên tên cột bạn nhớ hoặc đoán.
   bạn BẮT BUỘC phải gọi get_unique_values TRƯỚC khi viết SQL để lấy giá trị thực tế trong DB.
   KHÔNG tự đoán giá trị của các cột này dù tên có vẻ phổ biến.
 
+- Ý nghĩa cột địa giới hành chính:
+  1. `quan`: là Quận/Huyện (đơn vị cấp quận HOẶC huyện, vd: Cầu Giấy, Đông Anh). Khi user nói "quận" hay "huyện" đều ánh xạ vào cột `quan`.
+  2. `phuong`: là Phường/Xã (đơn vị cấp phường HOẶC xã, trực thuộc Quận/Huyện ở cột `quan`). Khi user nói "phường" hay "xã" đều ánh xạ vào cột `phuong`.
+
 - get_unique_values CHỈ được gọi với 4 cột:
   1. quan
   2. phuong
@@ -88,11 +92,14 @@ KHÔNG được viết SQL dựa trên tên cột bạn nhớ hoặc đoán.
 
 - Với cột text tự do tieu_de:
   KHÔNG được gọi get_unique_values.
-  Khi cần lọc keyword trong tieu_de, dùng:
+  Loại hình BĐS (chung cư, chung cư mini, nhà riêng, nhà phố, biệt thự…) và tên dự án
+  (Vinhomes, Times City, Royal City…) KHÔNG có cột riêng — đều nằm trong tieu_de.
+  Khi cần lọc loại hình hoặc tên dự án, dùng:
   tieu_de ILIKE '%<keyword>%'
 
   Ví dụ:
   WHERE tieu_de ILIKE '%chung cư%'
+  WHERE tieu_de ILIKE '%vinhomes%'
 
 - Nếu người dùng yêu cầu biểu đồ, bạn BẮT BUỘC gọi:
   execute_sql(sql_query, output_format="json")
@@ -122,7 +129,8 @@ KHÔNG được viết SQL dựa trên tên cột bạn nhớ hoặc đoán.
   2. Sửa lỗi.
   3. Chạy lại execute_sql.
 
-- Bạn được phép retry tối đa 5 lần.
+- Bạn CHỈ được gọi execute_sql TỐI ĐA 5 LẦN cho mỗi request (tính cả các lần retry sửa lỗi).
+  Sau 5 lần mà vẫn chưa có kết quả hợp lệ, DỪNG và báo lại supervisor_agent, KHÔNG gọi thêm.
 
 - Nếu SQL đã trả sẵn chỉ số cuối cùng cần trả lời thì dùng trực tiếp kết quả SQL.
   Ví dụ: SQL đã có cột `chenh_lech`, `ty_le_phan_tram`, `so_lan`, `tong_gia_tri`, `ty_trong`, `gia_moi`.
@@ -232,7 +240,7 @@ GROUP BY <cột_nhóm> ORDER BY so_luong DESC
 
 ### Phản hồi text (output_format = "text")
 - **Thống kê 1 số**: 1 dòng tự nhiên, KHÔNG markdown. Vd: "Có 1234 căn tại Cầu Giấy.", "Giá trung bình ở Đống Đa là 5.6 tỷ."
-- **Group by**: bullet list `•`, liệt kê đủ nhóm.
+- **Group by**: bullet list `•`, BẮT BUỘC liệt kê ĐẦY ĐỦ TẤT CẢ các nhóm mà SQL trả về (mỗi quận/nhóm 1 dòng kèm số liệu của nó). TUYỆT ĐỐI KHÔNG tóm tắt, KHÔNG chỉ nêu vài nhóm tiêu biểu (lớn nhất/nhỏ nhất), KHÔNG bỏ bớt nhóm nào khi user hỏi "theo từng quận"
 - **Top N / Ranking**: list đánh số `1. ... 2. ...`.
 - **Multi-metric** (window): mỗi dòng gộp metric ngăn bởi `|`. Vd: `- Hoàn Kiếm: 14.2 tỷ | chênh +5.1 tỷ`.
 ---

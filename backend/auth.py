@@ -1,4 +1,3 @@
-"""JWT authentication utilities."""
 import os
 from datetime import datetime, timedelta, timezone
 

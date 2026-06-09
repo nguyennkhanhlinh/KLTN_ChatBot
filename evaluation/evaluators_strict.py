@@ -4,22 +4,28 @@ LLM-as-Judge evaluators — 4 chỉ số chất lượng, thang 1-5.
 
 import json
 import os
+import sys
 import time
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from langsmith.schemas import Run, Example
-from langchain_openai import ChatOpenAI
+from src.llm.llm_client import OpenAIClient
+
+
 
 _JUDGE_MODEL = os.getenv("JUDGE_MODEL", "gpt-4.1")
 _MAX_RETRIES = 5
 
-_judge = ChatOpenAI(
+
+_judge = OpenAIClient(
     model=_JUDGE_MODEL,
     temperature=0,
-    api_key=os.getenv("OPENAI_API_KEY"),
 )
 
 
-_BASE = """Bạn là chuyên gia đánh giá độc lập chất lượng chatbot tư vấn Bất động sản Hà Nội.
+_BASE = """Bạn là chuyên gia đánh giá nghiêm khắc và chặt chẽ chất lượng hệ thống chatbot tư vấn Bất động sản Hà Nội.
 
 Hệ thống gồm 3 agent chuyên biệt:
 - Finance Agent       : tính toán tài chính (PMT, LTV, so sánh kịch bản vay, lãi suất hỗn hợp)
@@ -40,9 +46,9 @@ TIÊU CHÍ ĐÁNH GIÁ:
 
 HƯỚNG DẪN CHẤM ĐIỂM:
 - Chỉ dùng điểm nguyên từ 1 đến 5.
-- Đọc kỹ bảng tiêu chí và đối chiếu với câu trả lời thực tế.
-- Nếu tool outputs rỗng: chấm dựa trên câu trả lời và câu hỏi.
-- Lý do phải cụ thể, chỉ rõ điểm đạt/chưa đạt.
+- Đối chiếu từng mức điểm với câu trả lời, không chấm theo cảm tính.
+- Lý do phải cụ thể, chỉ rõ vi phạm khiến bị trừ điểm.
+- Công bằng giữa mọi model khác nhau, không thiên vị model nào.  
 
 Trả về JSON duy nhất, không có text nào khác:
 {{"score": <số nguyên 1-5>, "reason": "<1-2 câu giải thích cụ thể>"}}"""
@@ -50,26 +56,23 @@ Trả về JSON duy nhất, không có text nào khác:
 
 _GROUNDEDNESS = """TÍNH CĂN CỨ DỮ LIỆU (STRICT) — Mức độ bám sát dữ liệu truy xuất
 
-5 — Toàn bộ thông tin có căn cứ trong tool outputs; không thêm bất kỳ
-    nhận xét hay số liệu nào ngoài dữ liệu truy xuất.
-4 — Tất cả số liệu cứng có căn cứ; có tối đa 1 nhận xét định tính nhỏ
-    không gây hiểu nhầm về kết quả.
-3 — Có đúng 1 vi phạm CỨNG; phần còn lại bám sát dữ liệu.
-2 — Có từ 2 vi phạm CỨNG trở lên, hoặc 1 thông tin sai làm thay đổi kết quả.
+5 — Toàn bộ thông tin có căn cứ trong tool outputs; không thêm bất kỳ nhận xét hay số liệu nào ngoài dữ liệu truy xuất
+4 — Tất cả số liệu cứng có căn cứ; có tối đa 1 nhận xét định tính nhỏ không gây hiểu nhầm về kết quả
+3 — Có đúng 1 vi phạm, phần còn lại bám sát dữ liệu.
+2 — Có từ 2 vi phạm trở lên, hoặc 1 thông tin sai làm thay đổi kết quả
 1 — Câu trả lời bịa đặt số liệu hoặc gần như không dựa trên dữ liệu truy xuất."""
 
 _RELEVANCE = """TÍNH LIÊN QUAN (LENIENT) — Mức độ phù hợp với yêu cầu người dùng
 
 Bảng điểm:
-5 — Trả lời đúng và đầy đủ trọng tâm câu hỏi.
-4 — Trả lời đúng trọng tâm; có thể có thông tin thêm hoặc một phần nhỏ lệch
-    nhưng không ảnh hưởng đến giá trị câu trả lời.
-3 — Trả lời được phần cốt lõi nhưng bỏ sót hoặc lệch một phần quan trọng
-    trong yêu cầu của người dùng.
+5 — Trả lời đúng trọng tâm câu hỏi
+4 — Trả lời đúng trọng tâm, có thể có thông tin thêm hoặc một phần nhỏ lệch nhưng không ảnh hưởng đến giá trị câu trả lời.
+3 — Trả lời được phần cốt lõi nhưng bỏ sót hoặc lệch một phần quan trọng trong yêu cầu của người dùng.
 2 — Chỉ trả lời được phần nhỏ của yêu cầu; phần lớn câu hỏi bị bỏ qua.
 1 — Câu trả lời lạc đề hoàn toàn, không giải quyết được bất kỳ phần nào."""
 
 _COMPLETENESS = """TÍNH ĐẦY ĐỦ (MAXIMUM LENIENT) — Mức độ đầy đủ của câu trả lời
+
 
 Bảng điểm:
 5 — Trả lời đầy đủ yêu cầu cốt lõi.
@@ -80,15 +83,13 @@ Bảng điểm:
 2 — Yêu cầu chính chưa được trả lời rõ ràng; câu trả lời chỉ đề cập sơ qua.
 1 — Không giải quyết được yêu cầu nào của người dùng."""
 
-_CLARITY = """TÍNH RÕ RÀNG (STRICT) — Mức độ rõ ràng và dễ hiểu
+_CLARITY = """TÍNH RÕ RÀNG (BALANCED) — Mức độ rõ ràng và dễ hiểu
 
 Bảng điểm:
-5 — Cấu trúc rõ ràng, có tiêu đề/bullet phân tách hợp lý; TẤT CẢ số liệu có đơn vị;
-    người dùng đọc một lần hiểu ngay kết quả chính.
-4 — Cấu trúc tốt; tất cả số liệu cứng (giá, PMT, diện tích) có đơn vị;
-    chỉ thiếu đơn vị ở con số phụ không ảnh hưởng đến quyết định.
-3 — Thiếu đơn vị ở ít nhất 1 số liệu quan trọng, HOẶC cấu trúc trình bày chưa nhất quán.
-2 — Thiếu đơn vị ở nhiều số liệu; các thông tin bị trộn lẫn, khó theo dõi.
+5 — Cấu trúc rõ ràng, có tiêu đề, phân tách hợp lý, tất cả số liệu có đơn vị; người dùng đọc một lần hiểu ngay kết quả chính
+4 — Cấu trúc tốt; tất cả số liệu cứng (giá, PMT, diện tích) có đơn vị, chỉ thiếu đơn vị ở con số phụ không ảnh hưởng đến quyết định.
+3 — Thiếu đơn vị ở ít nhất 1 số liệu quan trọng, hoặc cấu trúc trình bày chưa nhất quán
+2 — Thiếu đơn vị ở nhiều số liệu, các thông tin bị trộn lẫn, khó theo dõi.
 1 — Câu trả lời rất khó đọc hoặc gần như không thể hiểu được."""
 
 
@@ -152,4 +153,4 @@ def eval_clarity(run: Run, example: Example) -> dict:
     return {"key": "clarity", **result}
 
 
-ALL_EVALUATORS = [eval_groundedness, eval_relevance, eval_completeness, eval_clarity]
+QUALITY_EVALUATORS = [eval_groundedness, eval_relevance, eval_completeness, eval_clarity]

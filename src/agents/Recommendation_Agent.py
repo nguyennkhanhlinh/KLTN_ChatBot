@@ -1,10 +1,8 @@
-import asyncio
 import sys
 import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from langchain_core.messages import HumanMessage
 from langchain.agents import create_agent
 
 from src.llm.llm_client import OpenAIClient
@@ -35,27 +33,3 @@ def create_Recommendation_agent(model: str = _DEFAULT_MODEL):
         system_prompt=Recommendation_PROMPT,
         name="Recommendation_agent",
     )
-
-
-if __name__ == "__main__":
-    agent = create_Recommendation_agent()
-
-    test_questions = [
-        "Căn hộ 3PN Cầu Giấy dưới 5 tỷ gần metro",        # Case A
-        "Nhà 2PN dưới 5 tỷ ở Gia Lâm",                     # Case B
-        "Căn nào view hồ Tây đẹp?",                         # Case C
-        "Căn hộ 3PN Thanh Xuân, nội thất đầy đủ, tầm 7-8 tỷ có không gian sống thoáng mát",  # Case A
-        "Nhà dưới 6 tỷ ở Đống Đa, diện tích trên 50m², gần hồ hoặc công viên",               # Case A
-    ]
-
-    for question in test_questions:
-        print(f"\n{'='*60}")
-        print(f"Q: {question}")
-        print(f"{'='*60}")
-        try:
-            result = asyncio.run(agent.ainvoke({
-                "messages": [HumanMessage(content=question)]
-            }))
-            print(result["messages"][-1].content)
-        except Exception as e:
-            print(f"Lỗi: {e}")

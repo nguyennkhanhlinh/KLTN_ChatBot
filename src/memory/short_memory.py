@@ -75,7 +75,32 @@ async def init_checkpointer() -> AsyncPostgresSaver:
                 "CREATE TABLE IF NOT EXISTS user_sessions ("
                 "  session_id TEXT PRIMARY KEY,"
                 "  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
+                "  model VARCHAR(80),"
                 "  created_at TIMESTAMPTZ DEFAULT NOW()"
+                ")"
+            )
+            await cur.execute("ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS model VARCHAR(80)")
+            # Log mỗi lượt chat → đếm số lượt sử dụng theo model
+            await cur.execute(
+                "CREATE TABLE IF NOT EXISTS chat_log ("
+                "  id BIGSERIAL PRIMARY KEY,"
+                "  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,"
+                "  session_id TEXT,"
+                "  model VARCHAR(80),"
+                "  created_at TIMESTAMPTZ DEFAULT NOW()"
+                ")"
+            )
+            # Phản hồi like/dislike cho từng tin nhắn bot (1 user / 1 tin = 1 đánh giá)
+            await cur.execute(
+                "CREATE TABLE IF NOT EXISTS message_feedback ("
+                "  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
+                "  session_id TEXT NOT NULL,"
+                "  msg_key TEXT NOT NULL,"
+                "  rating VARCHAR(10) NOT NULL,"          # 'like' | 'dislike'
+                "  reason VARCHAR(20),"                   # wrong_data|irrelevant|incomplete|unclear|other
+                "  comment TEXT,"                         # text khi reason = 'other'
+                "  created_at TIMESTAMPTZ DEFAULT NOW(),"
+                "  PRIMARY KEY (user_id, session_id, msg_key)"
                 ")"
             )
 

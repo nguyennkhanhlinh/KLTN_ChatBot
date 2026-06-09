@@ -21,11 +21,6 @@ MAX_CANDIDATES = 30
 
 
 class OpenRouterReranker:
-    """Rerank qua OpenRouter (/v1/rerank, chuẩn Cohere).
-
-    Giữ nguyên interface ``predict(pairs)`` của CrossEncoder: nhận list
-    ``(query, document)`` và trả điểm relevance theo đúng thứ tự input.
-    """
 
     def __init__(self, model: str = RERANKER_MODEL):
         self.model = model

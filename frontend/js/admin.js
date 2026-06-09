@@ -27,10 +27,102 @@ navItems.forEach(btn => {
     btn.classList.add('active');
     document.querySelectorAll('.admin-tab').forEach(t => t.hidden = true);
     document.getElementById(`tab-${btn.dataset.tab}`).hidden = false;
+    if (btn.dataset.tab === 'overview') loadStats();
     if (btn.dataset.tab === 'users')    loadUsers();
     if (btn.dataset.tab === 'sessions') loadSessions();
   });
 });
+
+
+/* ===================== DASHBOARD (Tổng quan) ===================== */
+
+const DASH_ACCENT = '#1d4ed8';
+const DASH_GREEN  = '#0f766e';
+const DASH_GRID   = 'rgba(79,142,247,0.12)';
+const DASH_TICK   = '#7a90b8';
+
+function _dashLayout(title, extra = {}) {
+  return {
+    title: { text: title, font: { color: '#c8d8f0', size: 13 }, x: 0.02 },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { color: DASH_TICK, size: 11 },
+    margin: { l: 48, r: 18, t: 40, b: 48 },
+    xaxis: { gridcolor: DASH_GRID, color: DASH_TICK, automargin: true },
+    yaxis: { gridcolor: DASH_GRID, color: DASH_TICK, automargin: true },
+    showlegend: false,
+    ...extra,
+  };
+}
+
+const _dashCfg = { responsive: true, displayModeBar: false };
+
+async function loadStats() {
+  const res = await apiFetch('/admin/stats');
+  if (!res.ok) return;
+  const s = await res.json();
+  renderKpi(s.kpi);
+
+  // So sánh model sử dụng (số phiên theo model)
+  const mu = s.model_usage || [];
+  Plotly.newPlot('chartUsersByDay', [{
+    type: 'bar',
+    x: mu.map(r => r[0]), y: mu.map(r => r[1]),
+    marker: { color: DASH_ACCENT },
+  }], _dashLayout('So sánh model sử dụng'), _dashCfg);
+
+  // Phiên chat theo ngày
+  Plotly.newPlot('chartSessionsByDay', [{
+    type: 'scatter', mode: 'lines+markers',
+    x: s.sessions_by_day.map(r => r[0]), y: s.sessions_by_day.map(r => r[1]),
+    line: { color: DASH_GREEN, width: 2 }, marker: { color: DASH_GREEN, size: 6 },
+    fill: 'tozeroy', fillcolor: 'rgba(15,118,110,0.45)',
+  }], _dashLayout('Phiên chat theo ngày'), _dashCfg);
+
+  // Top user theo số phiên (bar ngang, đảo để cao nhất ở trên)
+  const tu = [...s.top_users].reverse();
+  Plotly.newPlot('chartTopUsers', [{
+    type: 'bar', orientation: 'h',
+    y: tu.map(r => r[0]), x: tu.map(r => r[1]),
+    marker: { color: DASH_ACCENT },
+  }], _dashLayout('Top người dùng (theo số phiên)', { margin: { l: 90, r: 18, t: 40, b: 40 } }), _dashCfg);
+
+  // Lý do không hài lòng (dislike có chọn lý do)
+  const reasonLabels = {
+    wrong_data: 'Sai số liệu', irrelevant: 'Không liên quan',
+    incomplete: 'Thiếu thông tin', unclear: 'Khó hiểu', other: 'Khác',
+  };
+  const dr = s.dislike_reasons || [];
+  Plotly.newPlot('chartRoleRatio', [{
+    type: 'bar',
+    x: dr.map(r => reasonLabels[r[0]] || r[0]), y: dr.map(r => r[1]),
+    marker: { color: '#f87171' },
+  }], _dashLayout('Lý do không hài lòng'), _dashCfg);
+
+  // Phiên theo khung giờ (điền đủ 0–23h)
+  const byHour = new Array(24).fill(0);
+  s.sessions_by_hour.forEach(([h, c]) => { if (h >= 0 && h < 24) byHour[h] = c; });
+  Plotly.newPlot('chartSessionsByHour', [{
+    type: 'bar',
+    x: byHour.map((_, h) => `${h}h`), y: byHour,
+    marker: { color: DASH_GREEN },
+  }], _dashLayout('Phiên theo khung giờ'), _dashCfg);
+}
+
+function renderKpi(k) {
+  const cards = [
+    { label: 'Người dùng',       value: k.total_users,    sub: `+${k.users_today} hôm nay` },
+    { label: 'Phiên chat',       value: k.total_sessions, sub: `+${k.sessions_today} hôm nay` },
+    { label: 'Lượt thích',       value: k.like_count,     sub: '' },
+    { label: 'Lượt không thích', value: k.dislike_count,  sub: '' },
+  ];
+  document.getElementById('dashKpi').innerHTML = cards.map(c => `
+    <div class="dash-kpi-card">
+      <div class="dash-kpi-value">${(c.value || 0).toLocaleString('vi-VN')}</div>
+      <div class="dash-kpi-label">${c.label}</div>
+      ${c.sub ? `<div class="dash-kpi-sub">${c.sub}</div>` : ''}
+    </div>`).join('');
+}
 
 
 async function loadUsers() {
@@ -206,4 +298,5 @@ document.getElementById('sessionFilterInput').addEventListener('input', (e) => {
 });
 
 
-loadUsers();
+loadStats();
+

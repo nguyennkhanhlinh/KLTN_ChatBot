@@ -1,4 +1,3 @@
-"""Test 4 tool số học cơ bản. Gọi tool qua .invoke({...})."""
 from src.tools.calculator import add, subtract, multiply, divide
 
 

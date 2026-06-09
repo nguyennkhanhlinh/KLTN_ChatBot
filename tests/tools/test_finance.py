@@ -1,9 +1,3 @@
-"""Test các tool tài chính BĐS (logic thuần, không cần DB/LLM).
-
-- calculate_finance: kế hoạch tài chính tổng quát
-- compare_loan_scenarios: so sánh kịch bản vay (trả JSON chart)
-- calculate_hybrid_rate: lãi suất hỗn hợp (ưu đãi -> thả nổi)
-"""
 import json
 
 import pytest
@@ -13,9 +7,7 @@ from src.tools.compare_loan_scenarios import compare_loan_scenarios
 from src.tools.calculate_hybrid_rate import calculate_hybrid_rate
 
 
-# =========================================================================== #
 # calculate_finance
-# =========================================================================== #
 class TestCalculateFinance:
     def test_only_equity_no_income_no_target(self):
         r = calculate_finance.invoke({"equity": 2.0, "interest_rate": 9.0, "loan_term_years": 20})
@@ -79,9 +71,7 @@ class TestCalculateFinance:
         assert r["extra_cost_min_ty"] == round(8.0 * 0.08, 3)  # base = target_price
 
 
-# =========================================================================== #
 # compare_loan_scenarios
-# =========================================================================== #
 class TestCompareLoanScenarios:
     def test_no_loan_needed(self):
         out = compare_loan_scenarios.invoke({"equity": 10.0, "target_price": 8.0})
@@ -141,9 +131,7 @@ class TestCompareLoanScenarios:
         assert [s["rate_pct"] for s in data["scenarios"]] == [6.5, 7.5]
 
 
-# =========================================================================== #
 # calculate_hybrid_rate
-# =========================================================================== #
 class TestCalculateHybridRate:
     _BASE = {
         "equity": 3.0, "target_price": 10.0,

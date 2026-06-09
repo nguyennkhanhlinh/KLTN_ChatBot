@@ -1,29 +1,15 @@
-"""Test toàn bộ API endpoint.
-
-Phân nhóm:
-  - Không cần gì: /health
-  - Auth: endpoint bảo vệ phải chặn khi thiếu/sai token
-  - Chat (mock LLM): /chat, /chat/stream — supervisor được mock, không gọi OpenAI
-  - Validation: /auth/register, /admin/users kiểm tra dữ liệu trước khi đụng DB
-  - DB (fake_db): login, me, sessions, admin — DB được giả lập
-"""
 import json
 
+import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 
-# --------------------------------------------------------------------------- #
 # /health
-# --------------------------------------------------------------------------- #
 async def test_health(client):
     res = await client.get("/health")
     assert res.status_code == 200
     assert res.json() == {"status": "ok"}
 
-
-# --------------------------------------------------------------------------- #
-# Auth: bắt buộc đăng nhập / phân quyền
-# --------------------------------------------------------------------------- #
 class TestAuthRequired:
     async def test_chat_requires_token(self, client):
         res = await client.post("/chat", json={"question": "hi"})
@@ -50,13 +36,8 @@ class TestAuthRequired:
         res = await client.get("/auth/me", headers={"Authorization": "Bearer rac-roi"})
         assert res.status_code == 401
 
-
-# --------------------------------------------------------------------------- #
-# /chat — mock LLM (supervisor giả)
-# --------------------------------------------------------------------------- #
 class TestChat:
     async def test_text_response(self, client, user_headers, mock_chat):
-        # mock_chat mặc định trả AIMessage("Mocked answer")
         res = await client.post("/chat", json={"question": "Xin chào"}, headers=user_headers)
         assert res.status_code == 200
         data = res.json()
@@ -99,16 +80,21 @@ class TestChat:
         )
         assert res.status_code == 200
 
+    async def test_llm_error_propagates(self, client, user_headers, mock_chat):
+        # /chat (non-stream) KHÔNG bọc try/except như /chat/stream:
+        # supervisor lỗi -> exception nổi lên (ASGITransport ném lại) -> 500.
+        mock_chat.raises(RuntimeError("LLM sap"))
+        with pytest.raises(RuntimeError, match="LLM sap"):
+            await client.post("/chat", json={"question": "hi"}, headers=user_headers)
 
-# --------------------------------------------------------------------------- #
+
 # /chat/stream — SSE, mock LLM
-# --------------------------------------------------------------------------- #
 class TestChatStream:
     async def test_stream_done_event(self, client, user_headers, mock_chat):
         res = await client.post("/chat/stream", json={"question": "hi"}, headers=user_headers)
         assert res.status_code == 200
         body = res.text
-        assert '"type": "step"' in body   # bước "đang phân tích..."
+        assert '"type": "step"' in body   
         assert '"type": "done"' in body   # sự kiện kết quả cuối
         assert "Mocked answer" in body
 
@@ -121,9 +107,7 @@ class TestChatStream:
         assert "LLM sap" in body
 
 
-# --------------------------------------------------------------------------- #
 # Validation (chạy trước khi đụng DB)
-# --------------------------------------------------------------------------- #
 class TestRegisterValidation:
     async def test_username_too_short(self, client):
         res = await client.post("/auth/register", json={"username": "ab", "password": "123456"})
@@ -133,10 +117,7 @@ class TestRegisterValidation:
         res = await client.post("/auth/register", json={"username": "abc", "password": "123"})
         assert res.status_code == 400
 
-
-# --------------------------------------------------------------------------- #
 # Auth có DB (fake_db)
-# --------------------------------------------------------------------------- #
 class TestAuthDB:
     async def test_login_success(self, client, fake_db):
         fake_db.cursor.fetchone_results = [(1, "alice", "secret", "user")]
@@ -180,9 +161,7 @@ class TestAuthDB:
         assert res.status_code == 404
 
 
-# --------------------------------------------------------------------------- #
-# Sessions (fake_db)
-# --------------------------------------------------------------------------- #
+# Sessions 
 class TestSessions:
     async def test_list_empty(self, client, user_headers, fake_db):
         res = await client.get("/sessions", headers=user_headers)
@@ -200,9 +179,7 @@ class TestSessions:
         assert res.json() == {"ok": True}
 
 
-# --------------------------------------------------------------------------- #
-# Admin (fake_db)
-# --------------------------------------------------------------------------- #
+# Admin 
 class TestAdmin:
     async def test_list_users_empty(self, client, admin_headers, fake_db):
         res = await client.get("/admin/users", headers=admin_headers)
@@ -236,3 +213,116 @@ class TestAdmin:
         res = await client.get("/admin/sessions", headers=admin_headers)
         assert res.status_code == 200
         assert res.json() == []
+
+
+# /feedback — like/dislike cho tin nhắn bot (fake_db)
+class TestFeedback:
+    async def test_requires_token(self, client):
+        res = await client.post("/feedback", json={"session_id": "s1", "msg_key": "m1"})
+        assert res.status_code == 401
+
+    async def test_get_requires_token(self, client):
+        res = await client.get("/feedback/s1")
+        assert res.status_code == 401
+
+    async def test_submit_like(self, client, user_headers, fake_db):
+        res = await client.post(
+            "/feedback",
+            json={"session_id": "s1", "msg_key": "m1", "rating": "like"},
+            headers=user_headers,
+        )
+        assert res.status_code == 200
+        assert res.json() == {"ok": True}
+        # rating có giá trị -> chạy INSERT ... ON CONFLICT (upsert), không phải DELETE
+        sql, params = fake_db.cursor.executed[-1]
+        assert "INSERT INTO message_feedback" in sql
+        assert params == (1, "s1", "m1", "like", None, None)
+
+    async def test_submit_dislike_with_reason(self, client, user_headers, fake_db):
+        res = await client.post(
+            "/feedback",
+            json={
+                "session_id": "s1",
+                "msg_key": "m2",
+                "rating": "dislike",
+                "reason": "sai thông tin",
+                "comment": "căn này đã bán",
+            },
+            headers=user_headers,
+        )
+        assert res.status_code == 200
+        sql, params = fake_db.cursor.executed[-1]
+        assert "INSERT INTO message_feedback" in sql
+        assert params == (1, "s1", "m2", "dislike", "sai thông tin", "căn này đã bán")
+
+    async def test_clear_rating_deletes(self, client, user_headers, fake_db):
+        # rating=None -> bỏ đánh giá -> DELETE
+        res = await client.post(
+            "/feedback",
+            json={"session_id": "s1", "msg_key": "m1"},
+            headers=user_headers,
+        )
+        assert res.status_code == 200
+        assert res.json() == {"ok": True}
+        sql, params = fake_db.cursor.executed[-1]
+        assert "DELETE FROM message_feedback" in sql
+        assert params == (1, "s1", "m1")
+
+    async def test_get_feedback(self, client, user_headers, fake_db):
+        fake_db.cursor.fetchall_results = [[("m1", "like", None), ("m2", "dislike", "sai")]]
+        res = await client.get("/feedback/s1", headers=user_headers)
+        assert res.status_code == 200
+        assert res.json() == {
+            "feedback": [
+                {"msg_key": "m1", "rating": "like", "reason": None},
+                {"msg_key": "m2", "rating": "dislike", "reason": "sai"},
+            ]
+        }
+
+    async def test_get_feedback_empty(self, client, user_headers, fake_db):
+        res = await client.get("/feedback/s1", headers=user_headers)
+        assert res.status_code == 200
+        assert res.json() == {"feedback": []}
+
+
+# /admin/stats — số liệu dashboard (fake_db)
+class TestAdminStats:
+    async def test_requires_admin(self, client, user_headers):
+        res = await client.get("/admin/stats", headers=user_headers)
+        assert res.status_code == 403
+
+    async def test_stats_kpi(self, client, admin_headers, fake_db, monkeypatch):
+        # 5 fetchone() đầu là các KPI đếm tổng (theo thứ tự trong code)
+        fake_db.cursor.fetchone_results = [(10,), (2,), (5,), (1,), (3,)]
+        # properties đếm ở DB chính (sync, ngoài fake_db) — ép lỗi để kiểm nhánh
+        # fallback trả 0, cho test độc lập việc máy có/không có DB thật.
+        import data.database as dbmod
+        monkeypatch.setattr(dbmod.Database, "get_conn",
+                            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no db")))
+        # fetchall còn lại để rỗng -> các chuỗi/biểu đồ rỗng, feedback = 0
+        res = await client.get("/admin/stats", headers=admin_headers)
+        assert res.status_code == 200
+        data = res.json()
+        kpi = data["kpi"]
+        assert kpi["total_users"] == 10
+        assert kpi["users_today"] == 2
+        assert kpi["total_sessions"] == 5
+        assert kpi["sessions_today"] == 1
+        assert kpi["active_users"] == 3
+        assert kpi["like_count"] == 0
+        assert kpi["dislike_count"] == 0
+        assert kpi["total_properties"] == 0  # DB properties không có -> except trả 0
+        # các khối dữ liệu biểu đồ tồn tại và rỗng
+        for key in ("users_by_day", "sessions_by_day", "top_users",
+                    "role_ratio", "model_usage", "sessions_by_hour", "dislike_reasons"):
+            assert data[key] == []
+
+    async def test_stats_feedback_counts(self, client, admin_headers, fake_db):
+        fake_db.cursor.fetchone_results = [(0,), (0,), (0,), (0,), (0,)]
+        # fetchall thứ 7 (sau 6 truy vấn biểu đồ) là GROUP BY rating của feedback
+        fake_db.cursor.fetchall_results = [[], [], [], [], [], [], [("like", 4), ("dislike", 1)]]
+        res = await client.get("/admin/stats", headers=admin_headers)
+        assert res.status_code == 200
+        kpi = res.json()["kpi"]
+        assert kpi["like_count"] == 4
+        assert kpi["dislike_count"] == 1
