@@ -2287,6 +2287,8 @@ html, body {
   margin-top: 6px;
   padding: 0 14px;
   white-space: nowrap;       /* số nằm gọn cạnh ô gõ, đúng ở cả welcome lẫn chat */
+  text-align: right;         /* bám mép phải: số tăng thì dài ra về trái, mép phải đứng yên */
+  font-variant-numeric: tabular-nums;  /* chữ số đều bề rộng, không giật khi đổi số */
   opacity: 0;
   transition: opacity var(--transition);
   pointer-events: none;

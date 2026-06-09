@@ -64,10 +64,14 @@ async function loadStats() {
   renderKpi(s.kpi);
 
   // So sánh model sử dụng (số phiên theo model)
+  const MODEL_LABELS = {
+    'deepseek/deepseek-v4-flash': 'deepseek v4 flash',
+    'mistralai/mistral-small-2603': 'mistral small 4',
+  };
   const mu = s.model_usage || [];
   Plotly.newPlot('chartUsersByDay', [{
     type: 'bar',
-    x: mu.map(r => r[0]), y: mu.map(r => r[1]),
+    x: mu.map(r => MODEL_LABELS[r[0]] || r[0]), y: mu.map(r => r[1]),
     marker: { color: DASH_ACCENT },
   }], _dashLayout('So sánh model sử dụng'), _dashCfg);
 

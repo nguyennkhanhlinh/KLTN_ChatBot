@@ -1,17 +1,15 @@
 import json
-
 from src.tools.execute_sql import execute_sql
 from src.tools.get_schema import get_schema
 from src.tools.get_unique_value import get_unique_values
 
 
-# execute_sql
 class TestExecuteSql:
     def test_blocks_drop(self, mock_db):
         out = execute_sql.invoke({"sql_query": "DROP TABLE properties"})
         assert "không được phép" in out
         assert "DROP" in out
-        assert mock_db.executed == []  # chặn trước khi chạm DB
+        assert mock_db.executed == []  
 
     def test_blocks_delete(self, mock_db):
         out = execute_sql.invoke({"sql_query": "DELETE FROM properties WHERE ma_code = 1"})

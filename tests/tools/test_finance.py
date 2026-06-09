@@ -1,7 +1,5 @@
 import json
-
 import pytest
-
 from src.tools.calculate_finance import calculate_finance
 from src.tools.compare_loan_scenarios import compare_loan_scenarios
 from src.tools.calculate_hybrid_rate import calculate_hybrid_rate
@@ -28,7 +26,6 @@ class TestCalculateFinance:
         assert r["max_budget_ty"] == pytest.approx(r["equity_ty"] + r["max_loan_ty"], abs=1e-6)
 
     def test_ltv_safe_boundary(self):
-        # target=10, equity=4 -> loan=6 -> LTV=60% -> "An toàn"
         r = calculate_finance.invoke({
             "equity": 4.0, "interest_rate": 9.0, "loan_term_years": 20, "target_price": 10.0,
         })
@@ -38,7 +35,6 @@ class TestCalculateFinance:
         assert r["monthly_payment_m"] > 0
 
     def test_ltv_acceptable_boundary(self):
-        # loan=7 -> LTV=70% -> "Chấp nhận được"
         r = calculate_finance.invoke({
             "equity": 3.0, "interest_rate": 9.0, "loan_term_years": 20, "target_price": 10.0,
         })
@@ -46,7 +42,6 @@ class TestCalculateFinance:
         assert r["ltv_level"] == "Chấp nhận được"
 
     def test_ltv_high_risk(self):
-        # loan=8 -> LTV=80% -> "Rủi ro cao"
         r = calculate_finance.invoke({
             "equity": 2.0, "interest_rate": 9.0, "loan_term_years": 20, "target_price": 10.0,
         })
