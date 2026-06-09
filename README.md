@@ -34,8 +34,7 @@ KLTN_ChatBot/
 ├── src/                          
 │   ├── agents/                   #   Supervisor + 3 sub-agent
 │   ├── prompts/                  #   System prompt từng agent
-│   ├── tools/                    #  
-│   │                            
+│   ├── tools/                                               
 │   ├── memory/                   #   short_term memory, long_termemory
 │   ├── llm/                     
 │   └── utils/                    
