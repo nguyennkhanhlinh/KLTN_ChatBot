@@ -35,7 +35,7 @@ services:
     container_name: kltn-backend
     env_file: .env            # OPENAI_API_KEY, JWT_SECRET_KEY, PG_USER/PASSWORD/DB...
     environment:
-      # DB chính + vector store dùng chung service "db" (ghi đè giá trị trong .env).
+      # DB chính + vector store dùng chung service 
       PG_HOST: db
       VECTOR_PG_HOST: db
       VECTOR_PG_PORT: "5432"

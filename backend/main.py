@@ -313,10 +313,16 @@ def _build_chat_payload(msgs: list, usage: dict | None = None) -> dict:
         return {"type": "mixed", "chart": chart_data, "text": analyst_text, **extra}
     if chart_data:
         return {"type": "chart", "data": chart_data, **extra}
-    if analyst_text and recommendation_text:
-        return {"type": "text", "content": analyst_text + "\n\n" + recommendation_text, **extra}
-    if recommendation_text:
-        return {"type": "text", "content": recommendation_text, **extra}
+    # Danh sách BĐS / phân tích: ưu tiên message cuối của supervisor (đã được chuẩn hoá
+    # format theo Supervisor_prompt), để stream hiển thị GIỐNG HỆT lúc reload từ checkpointer
+    # — vốn cũng đọc AIMessage cuối của supervisor. Tránh lệch định dạng (vd mất số 1.2.3)
+    # do output thô của sub-agent không nhất quán.
+    if analyst_text or recommendation_text:
+        if final_text and final_text.strip():
+            return {"type": "text", "content": final_text, **extra}
+        # Fallback hiếm: supervisor không trả text → dùng output sub-agent.
+        combined = "\n\n".join(t for t in (analyst_text, recommendation_text) if t)
+        return {"type": "text", "content": combined, **extra}
     return {"type": "text", "content": final_text, **extra}
 
 

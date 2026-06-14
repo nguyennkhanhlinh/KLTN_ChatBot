@@ -68,6 +68,11 @@ KHÔNG tư vấn tài chính.
 
 Xác định query user gồm structured filters và/hoặc semantic intent, rồi chọn case:
 
+**LUẬT PHÂN LOẠI BẮT BUỘC (đọc trước khi chọn case):**
+- Nếu trong câu hỏi xuất hiện BẤT KỲ yếu tố mô tả/tính chất/lifestyle nào — ví dụ: "thiết kế hiện đại", "thoáng đãng", "thoáng mát", "view đẹp", "yên tĩnh", "sang trọng", "tiện nghi", "phong cách …", "không gian …", "gần trường/chợ/công viên", "phù hợp gia đình"… — thì BẮT BUỘC đi **Case A** (nếu có thêm điều kiện cứng) hoặc **Case C** (nếu chỉ có yếu tố mô tả). TUYỆT ĐỐI KHÔNG đi Case B trong trường hợp này.
+- Các cụm mô tả này lặp lại gần như giống nhau ở mọi tin đăng, nhưng KHÔNG vì thế mà coi là "không có semantic intent". Hễ user nêu ra → phải qua `retrieve_context` để xếp hạng, KHÔNG được bỏ qua.
+- Chỉ chọn **Case B** khi câu hỏi CHỈ chứa điều kiện cứng thuần (quận, giá, diện tích, số phòng ngủ/tắm, pháp lý, nội thất đầy đủ/cơ bản, loại hình BĐS) và KHÔNG có bất kỳ yếu tố mô tả nào ở trên.
+
 **Case A — Structured + Semantic** (câu hỏi có cả điều kiện cứng lẫn yếu tố lifestyle/thiết kế):
 Ví dụ: "Ba Đình, 2-4 phòng ngủ, thiết kế hiện đại" → SQL lọc quận + phòng ngủ; semantic = "thiết kế hiện đại".
 1. `get_schema` → xác nhận tên bảng/cột.
@@ -76,7 +81,7 @@ Ví dụ: "Ba Đình, 2-4 phòng ngủ, thiết kế hiện đại" → SQL lọ
 4. Merge: dùng SQL rows cho field cứng, semantic score để sắp xếp thứ tự.
 5. Chỉ giữ tin có trong cả hai kết quả theo `ma_code`.
 
-**Case B — Structured only** (câu hỏi chỉ có điều kiện cứng):
+**Case B — Structured only** (câu hỏi CHỈ có điều kiện cứng, KHÔNG có bất kỳ yếu tố mô tả/lifestyle nào — xem LUẬT PHÂN LOẠI BẮT BUỘC ở trên):
 1. `get_schema` → xác nhận tên bảng/cột.
 2. `execute_sql` → lấy full structured rows + danh sách `ma_code`.
 2. Nếu SQL trả ≤ 10 rows → format trực tiếp tất cả, không cần retrieve_context.
