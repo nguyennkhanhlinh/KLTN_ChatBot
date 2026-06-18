@@ -3,4 +3,4 @@
 // Lưu ý: file này phải được nạp TRƯỚC các script khác trong mỗi HTML.
 const API = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
   ? 'http://localhost:8000'
-  : 'https://kltn-chatbot.onrender.com';
+  : 'https://kltn-chatbot-vpqm.onrender.com';
