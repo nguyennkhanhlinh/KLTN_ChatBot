@@ -1024,6 +1024,25 @@ html, body {
   box-shadow: 0 0 0 3px rgba(47,140,255,0.25), 0 0 18px rgba(110,160,255,0.3);
 }
 
+/* Chặn "vạch vàng nhấp nháy" do trình duyệt tự điền (Chrome/Safari autofill) */
+.login-field input:-webkit-autofill,
+.login-field input:-webkit-autofill:hover,
+.login-field input:-webkit-autofill:focus,
+.login-pw-wrap input:-webkit-autofill,
+.login-pw-wrap input:-webkit-autofill:hover,
+.login-pw-wrap input:-webkit-autofill:focus,
+.login-input-wrap input:-webkit-autofill,
+.login-input-wrap input:-webkit-autofill:hover,
+.login-input-wrap input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #fff;
+  caret-color: #fff;
+  /* box-shadow inset đè lên nền vàng mặc định của autofill */
+  -webkit-box-shadow: 0 0 0 1000px rgba(30,55,110,0.95) inset;
+  box-shadow: 0 0 0 1000px rgba(30,55,110,0.95) inset;
+  /* kéo dài transition để màu nền vàng không kịp "chớp" hiện ra */
+  transition: background-color 9999s ease-in-out 0s;
+}
+
 .login-pw-wrap {
   position: relative;
 }
@@ -1637,21 +1656,23 @@ html, body {
   flex-direction: column;
   /* Bán trong suốt để nền particle hiện rõ phía sau (vẫn đủ tối để đọc) */
   background: rgba(6, 16, 38, 0.9);
-  border: 1.5px solid rgba(170, 205, 255, 0.7);
+  /* Viền số nguyên 2px + màu tĩnh: tránh đốm sáng nhấp nháy ở mép bo góc trên màn hình DPI lẻ */
+  border: 2px solid rgba(110, 150, 230, 0.4);
   border-radius: 16px;
   position: relative;
-  /* Viền neon xanh-trắng glow đều quanh khung, "thở" nhẹ — giống login card */
+  /* Đẩy lên layer riêng để repaint của animation glow sạch, không để lại vạch sáng */
+  will-change: box-shadow;
+  transform: translateZ(0);
+  /* Viền neon xanh-trắng glow đều quanh khung, "thở" nhẹ — chỉ animate box-shadow, KHÔNG animate border-color */
   animation: chat-neon 4.5s ease-in-out infinite;
 }
 @keyframes chat-neon {
   0%, 100% {
-    border-color: rgba(90, 140, 230, 0.32);
     box-shadow:
       0 0 14px rgba(47, 140, 255, 0.16),
       inset 0 0 40px rgba(47, 140, 255, 0.04);
   }
   50% {
-    border-color: rgba(120, 165, 255, 0.5);
     box-shadow:
       0 0 22px rgba(47, 140, 255, 0.26),
       inset 0 0 48px rgba(47, 140, 255, 0.07);
