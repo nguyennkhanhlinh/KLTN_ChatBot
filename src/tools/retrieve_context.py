@@ -17,7 +17,7 @@ COSINE_THRESHOLD = float(os.getenv("COSINE_THRESHOLD", "0.6"))
 RERANK_THRESHOLD = float(os.getenv("RERANK_THRESHOLD", "0.0"))
 
 MIN_CANDIDATES = 10
-MAX_CANDIDATES = 30
+MAX_CANDIDATES = 25
 
 
 class OpenRouterReranker:
@@ -73,21 +73,15 @@ def retrieve_context(
 
     if ma_codes:
         ma_set = {str(c) for c in ma_codes}
-
-        # Số lượng search stage 1:
-        # nếu len(ma_codes) < 30 thì lấy len(ma_codes)
-        # nếu len(ma_codes) > 30 thì lấy tối đa 30
-        pool = min(len(ma_codes), MAX_CANDIDATES)
-
-        # Nhưng nếu SQL có >= 10 mã thì cố lấy ít nhất 10 candidate
-        pool = max(pool, min(MIN_CANDIDATES, len(ma_codes)))
+        k_search = max(len(ma_codes) * 3, MIN_CANDIDATES)
 
         raw = vector_store.similarity_search_with_relevance_scores(
             query,
-            k=pool,
+            k=k_search,
+            filter={"ma_code": {"$in": list(ma_set)}},
         )
 
-        # Chỉ giữ doc thuộc ma_codes từ SQL
+        # Filter đã giới hạn theo ma_codes
         raw_in_sql = [
             (doc, score)
             for doc, score in raw

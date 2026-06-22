@@ -1739,7 +1739,7 @@ html, body {
   flex: 1;
   overflow-y: auto;
   scrollbar-width: none;
-  padding: 20px 10px;
+  padding: 20px 10px 28px;
 }
 
 .chat-area:not(.welcome-mode) .messages-container::-webkit-scrollbar {
@@ -2203,7 +2203,7 @@ html, body {
 
 /* ===== INPUT BAR ===== */
 .input-bar {
-  padding: 6px 12px 10px;
+  padding: 16px 12px 10px;
   border-top: none;
   background: #06102a;
   border-radius: 0 0 16px 16px;

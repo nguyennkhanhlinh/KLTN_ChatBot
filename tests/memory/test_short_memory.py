@@ -3,7 +3,7 @@ import pytest
 import src.memory.short_memory as sm
 
 
-class _FakeCursor:
+class _MockCursor:
     def __init__(self):
         self.executed = []          # log (sql, params) đã chạy
         self.fetchall_result = []   # rows trả cho fetchall()
@@ -21,7 +21,7 @@ class _FakeCursor:
         return False
 
 
-class _FakeConn:
+class _MockConn:
     def __init__(self, cursor):
         self._cursor = cursor
 
@@ -35,9 +35,9 @@ class _FakeConn:
         return False
 
 
-class _FakePool:
+class _MockPool:
     def __init__(self, cursor):
-        self._conn = _FakeConn(cursor)
+        self._conn = _MockConn(cursor)
         self.closed = False
 
     def connection(self):
@@ -48,36 +48,36 @@ class _FakePool:
 
 
 @pytest.fixture
-def fake_pool(monkeypatch):
-    cursor = _FakeCursor()
-    pool = _FakePool(cursor)
+def mock_pool(monkeypatch):
+    cursor = _MockCursor()
+    pool = _MockPool(cursor)
     monkeypatch.setattr(sm, "_pool", pool)
     monkeypatch.setattr(sm, "_checkpointer", object())  # giả lập đã init
     return pool
 
 
-async def test_hide_thread_inserts(fake_pool):
+async def test_hide_thread_inserts(mock_pool):
     await sm.hide_thread("t-123")
-    sql, params = fake_pool._conn._cursor.executed[-1]
+    sql, params = mock_pool._conn._cursor.executed[-1]
     assert "INSERT INTO hidden_threads" in sql
     assert "ON CONFLICT" in sql          # soft-delete: trùng thì bỏ qua
     assert params == ("t-123",)
 
 
-async def test_get_hidden_thread_ids(fake_pool):
-    fake_pool._conn._cursor.fetchall_result = [("a",), ("b",), ("a",)]
+async def test_get_hidden_thread_ids(mock_pool):
+    mock_pool._conn._cursor.fetchall_result = [("a",), ("b",), ("a",)]
     result = await sm.get_hidden_thread_ids()
     assert result == {"a", "b"}          # trả về set -> tự khử trùng
 
 
-async def test_get_hidden_thread_ids_empty(fake_pool):
+async def test_get_hidden_thread_ids_empty(mock_pool):
     result = await sm.get_hidden_thread_ids()
     assert result == set()
 
 
-async def test_close_checkpointer(fake_pool):
+async def test_close_checkpointer(mock_pool):
     await sm.close_checkpointer()
-    assert fake_pool.closed is True
+    assert mock_pool.closed is True
     assert sm._pool is None
     assert sm.get_checkpointer() is None
 

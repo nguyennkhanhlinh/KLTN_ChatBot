@@ -117,10 +117,10 @@ class TestRegisterValidation:
         res = await client.post("/auth/register", json={"username": "abc", "password": "123"})
         assert res.status_code == 400
 
-# Auth có DB (fake_db)
+# Auth có DB (mock_db)
 class TestAuthDB:
-    async def test_login_success(self, client, fake_db):
-        fake_db.cursor.fetchone_results = [(1, "alice", "secret", "user")]
+    async def test_login_success(self, client, mock_db):
+        mock_db.cursor.fetchone_results = [(1, "alice", "secret", "user")]
         res = await client.post("/auth/login", json={"username": "alice", "password": "secret"})
         assert res.status_code == 200
         data = res.json()
@@ -128,52 +128,52 @@ class TestAuthDB:
         assert data["role"] == "user"
         assert data["access_token"]
 
-    async def test_login_wrong_password(self, client, fake_db):
-        fake_db.cursor.fetchone_results = [(1, "alice", "secret", "user")]
+    async def test_login_wrong_password(self, client, mock_db):
+        mock_db.cursor.fetchone_results = [(1, "alice", "secret", "user")]
         res = await client.post("/auth/login", json={"username": "alice", "password": "sai"})
         assert res.status_code == 401
 
-    async def test_login_unknown_user(self, client, fake_db):
-        fake_db.cursor.fetchone_results = []  # fetchone -> None
+    async def test_login_unknown_user(self, client, mock_db):
+        mock_db.cursor.fetchone_results = []  # fetchone -> None
         res = await client.post("/auth/login", json={"username": "ghost", "password": "x"})
         assert res.status_code == 401
 
-    async def test_register_success(self, client, fake_db):
-        fake_db.cursor.fetchone_results = [(5,)]  # RETURNING id
+    async def test_register_success(self, client, mock_db):
+        mock_db.cursor.fetchone_results = [(5,)]  # RETURNING id
         res = await client.post("/auth/register", json={"username": "newuser", "password": "123456"})
         assert res.status_code == 201
         assert res.json()["username"] == "newuser"
 
-    async def test_register_duplicate(self, client, fake_db):
-        fake_db.cursor.raise_on_execute = Exception("duplicate key")
+    async def test_register_duplicate(self, client, mock_db):
+        mock_db.cursor.raise_on_execute = Exception("duplicate key")
         res = await client.post("/auth/register", json={"username": "dup", "password": "123456"})
         assert res.status_code == 400
 
-    async def test_me_success(self, client, user_headers, fake_db):
-        fake_db.cursor.fetchone_results = [("alice", "a@e.com", "0900", "user", None)]
+    async def test_me_success(self, client, user_headers, mock_db):
+        mock_db.cursor.fetchone_results = [("alice", "a@e.com", "0900", "user", None)]
         res = await client.get("/auth/me", headers=user_headers)
         assert res.status_code == 200
         assert res.json()["username"] == "alice"
 
-    async def test_me_not_found(self, client, user_headers, fake_db):
-        fake_db.cursor.fetchone_results = []
+    async def test_me_not_found(self, client, user_headers, mock_db):
+        mock_db.cursor.fetchone_results = []
         res = await client.get("/auth/me", headers=user_headers)
         assert res.status_code == 404
 
 
 # Sessions 
 class TestSessions:
-    async def test_list_empty(self, client, user_headers, fake_db):
+    async def test_list_empty(self, client, user_headers, mock_db):
         res = await client.get("/sessions", headers=user_headers)
         assert res.status_code == 200
         assert res.json() == []
 
-    async def test_get_session_empty(self, client, user_headers, fake_db):
+    async def test_get_session_empty(self, client, user_headers, mock_db):
         res = await client.get("/sessions/abc", headers=user_headers)
         assert res.status_code == 200
         assert res.json() == {"messages": []}
 
-    async def test_delete_session(self, client, user_headers, fake_db):
+    async def test_delete_session(self, client, user_headers, mock_db):
         res = await client.delete("/sessions/abc", headers=user_headers)
         assert res.status_code == 200
         assert res.json() == {"ok": True}
@@ -181,13 +181,13 @@ class TestSessions:
 
 # Admin 
 class TestAdmin:
-    async def test_list_users_empty(self, client, admin_headers, fake_db):
+    async def test_list_users_empty(self, client, admin_headers, mock_db):
         res = await client.get("/admin/users", headers=admin_headers)
         assert res.status_code == 200
         assert res.json() == []
 
-    async def test_create_user_success(self, client, admin_headers, fake_db):
-        fake_db.cursor.fetchone_results = [(7,)]
+    async def test_create_user_success(self, client, admin_headers, mock_db):
+        mock_db.cursor.fetchone_results = [(7,)]
         res = await client.post(
             "/admin/users",
             json={"username": "bob", "password": "123456", "role": "user"},
@@ -196,7 +196,7 @@ class TestAdmin:
         assert res.status_code == 200
         assert res.json()["id"] == 7
 
-    async def test_create_user_invalid_role(self, client, admin_headers, fake_db):
+    async def test_create_user_invalid_role(self, client, admin_headers, mock_db):
         res = await client.post(
             "/admin/users",
             json={"username": "bob", "password": "123456", "role": "superadmin"},
@@ -204,18 +204,18 @@ class TestAdmin:
         )
         assert res.status_code == 400
 
-    async def test_migrate_sessions(self, client, admin_headers, fake_db):
+    async def test_migrate_sessions(self, client, admin_headers, mock_db):
         res = await client.post("/admin/migrate-sessions", headers=admin_headers)
         assert res.status_code == 200
         assert res.json() == {"migrated": 0}
 
-    async def test_list_sessions_empty(self, client, admin_headers, fake_db):
+    async def test_list_sessions_empty(self, client, admin_headers, mock_db):
         res = await client.get("/admin/sessions", headers=admin_headers)
         assert res.status_code == 200
         assert res.json() == []
 
 
-# /feedback — like/dislike cho tin nhắn bot (fake_db)
+# /feedback — like/dislike cho tin nhắn bot (mock_db)
 class TestFeedback:
     async def test_requires_token(self, client):
         res = await client.post("/feedback", json={"session_id": "s1", "msg_key": "m1"})
@@ -225,7 +225,7 @@ class TestFeedback:
         res = await client.get("/feedback/s1")
         assert res.status_code == 401
 
-    async def test_submit_like(self, client, user_headers, fake_db):
+    async def test_submit_like(self, client, user_headers, mock_db):
         res = await client.post(
             "/feedback",
             json={"session_id": "s1", "msg_key": "m1", "rating": "like"},
@@ -234,11 +234,11 @@ class TestFeedback:
         assert res.status_code == 200
         assert res.json() == {"ok": True}
         # rating có giá trị -> chạy INSERT ... ON CONFLICT (upsert), không phải DELETE
-        sql, params = fake_db.cursor.executed[-1]
+        sql, params = mock_db.cursor.executed[-1]
         assert "INSERT INTO message_feedback" in sql
         assert params == (1, "s1", "m1", "like", None, None)
 
-    async def test_submit_dislike_with_reason(self, client, user_headers, fake_db):
+    async def test_submit_dislike_with_reason(self, client, user_headers, mock_db):
         res = await client.post(
             "/feedback",
             json={
@@ -251,11 +251,11 @@ class TestFeedback:
             headers=user_headers,
         )
         assert res.status_code == 200
-        sql, params = fake_db.cursor.executed[-1]
+        sql, params = mock_db.cursor.executed[-1]
         assert "INSERT INTO message_feedback" in sql
         assert params == (1, "s1", "m2", "dislike", "sai thông tin", "căn này đã bán")
 
-    async def test_clear_rating_deletes(self, client, user_headers, fake_db):
+    async def test_clear_rating_deletes(self, client, user_headers, mock_db):
         # rating=None -> bỏ đánh giá -> DELETE
         res = await client.post(
             "/feedback",
@@ -264,12 +264,12 @@ class TestFeedback:
         )
         assert res.status_code == 200
         assert res.json() == {"ok": True}
-        sql, params = fake_db.cursor.executed[-1]
+        sql, params = mock_db.cursor.executed[-1]
         assert "DELETE FROM message_feedback" in sql
         assert params == (1, "s1", "m1")
 
-    async def test_get_feedback(self, client, user_headers, fake_db):
-        fake_db.cursor.fetchall_results = [[("m1", "like", None), ("m2", "dislike", "sai")]]
+    async def test_get_feedback(self, client, user_headers, mock_db):
+        mock_db.cursor.fetchall_results = [[("m1", "like", None), ("m2", "dislike", "sai")]]
         res = await client.get("/feedback/s1", headers=user_headers)
         assert res.status_code == 200
         assert res.json() == {
@@ -279,22 +279,22 @@ class TestFeedback:
             ]
         }
 
-    async def test_get_feedback_empty(self, client, user_headers, fake_db):
+    async def test_get_feedback_empty(self, client, user_headers, mock_db):
         res = await client.get("/feedback/s1", headers=user_headers)
         assert res.status_code == 200
         assert res.json() == {"feedback": []}
 
 
-# /admin/stats — số liệu dashboard (fake_db)
+# /admin/stats — số liệu dashboard (mock_db)
 class TestAdminStats:
     async def test_requires_admin(self, client, user_headers):
         res = await client.get("/admin/stats", headers=user_headers)
         assert res.status_code == 403
 
-    async def test_stats_kpi(self, client, admin_headers, fake_db, monkeypatch):
+    async def test_stats_kpi(self, client, admin_headers, mock_db, monkeypatch):
         # 5 fetchone() đầu là các KPI đếm tổng (theo thứ tự trong code)
-        fake_db.cursor.fetchone_results = [(10,), (2,), (5,), (1,), (3,)]
-        # properties đếm ở DB chính (sync, ngoài fake_db) — ép lỗi để kiểm nhánh
+        mock_db.cursor.fetchone_results = [(10,), (2,), (5,), (1,), (3,)]
+        # properties đếm ở DB chính (sync, ngoài mock_db) — ép lỗi để kiểm nhánh
         # fallback trả 0, cho test độc lập việc máy có/không có DB thật.
         import data.database as dbmod
         monkeypatch.setattr(dbmod.Database, "get_conn",
@@ -317,10 +317,10 @@ class TestAdminStats:
                     "role_ratio", "model_usage", "sessions_by_hour", "dislike_reasons"):
             assert data[key] == []
 
-    async def test_stats_feedback_counts(self, client, admin_headers, fake_db):
-        fake_db.cursor.fetchone_results = [(0,), (0,), (0,), (0,), (0,)]
+    async def test_stats_feedback_counts(self, client, admin_headers, mock_db):
+        mock_db.cursor.fetchone_results = [(0,), (0,), (0,), (0,), (0,)]
         # fetchall thứ 7 (sau 6 truy vấn biểu đồ) là GROUP BY rating của feedback
-        fake_db.cursor.fetchall_results = [[], [], [], [], [], [], [("like", 4), ("dislike", 1)]]
+        mock_db.cursor.fetchall_results = [[], [], [], [], [], [], [("like", 4), ("dislike", 1)]]
         res = await client.get("/admin/stats", headers=admin_headers)
         assert res.status_code == 200
         kpi = res.json()["kpi"]

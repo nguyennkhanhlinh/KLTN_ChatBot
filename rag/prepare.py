@@ -50,8 +50,58 @@ def _tidy(text: str) -> str:
     return "\n".join(out)
 
 
+# Số điện thoại (kể cả dạng đã bị cắt còn vài số đầu như "0916").
+_PHONE_RE = re.compile(r"0\d{2,}[\d.\s\-]*")
+
+# Câu/segment liên hệ - môi giới - disclaimer 
+_CONTACT_RE = re.compile(
+    r"(liên hệ|\bLH\b|\bMTG\b|\bQC\b|để được tư vấn|tham quan dự án|"
+    r"xem nhà miễn phí|\bMs\b|\bMr\b|\bMrs\b|Ac\s*e|A/c|zalo|hotline|"
+    r"\bSĐT\b|chuyên nhà đất|ảnh chuẩn|thông tin chính xác|nhà thật)",
+    re.IGNORECASE,
+)
+
+# Cụm từ sáo rỗng 
+_FLUFF_RE = re.compile(
+    r"(sổ đỏ chính chủ|chính chủ|cần bán gấp|bán gấp|siêu hiếm|nhanh thì kịp|"
+    r"hàng hiếm|thiện chí bán|giao dịch nhanh|"
+    r"\bhot\b|\bsốc\b)",
+    re.IGNORECASE,
+)
+
+
+def _strip_listing_noise(text: str) -> str:
+    """Bỏ SĐT, dòng liên hệ/môi giới, và các cụm rao bán sáo rỗng — ở cấp câu/segment.
+
+    Chỉ giữ nội dung mô tả thực chất để embedding không bị nhiễu.
+    """
+    if not text:
+        return ""
+    text = _PHONE_RE.sub(" ", text)
+
+    # Tách theo xuống dòng và ranh giới câu.
+    segments = re.split(r"\n+|(?<=[.!?])\s+", text)
+
+    kept: list[str] = []
+    for seg in segments:
+        s = seg.strip(" .\t-*+•")
+        if not s:
+            continue
+        # Bỏ nguyên câu nếu là thông tin liên hệ/môi giới.
+        if _CONTACT_RE.search(s):
+            continue
+        # Xóa cụm sáo rỗng nhưng giữ phần còn lại.
+        s = _FLUFF_RE.sub("", s)
+        # Sau khi xóa, nếu còn quá ít chữ cái → bỏ (chỉ còn rác/số).
+        if len(re.sub(r"[\d\W_]+", "", s)) < 3:
+            continue
+        kept.append(re.sub(r"\s+", " ", s).strip(" ,.-"))
+
+    return ". ".join(p for p in kept if p).strip()
+
+
 def clean_text(text: str) -> str:
-    return _tidy(_normalize(_regex_clean(text)))
+    return _strip_listing_noise(_tidy(_normalize(_regex_clean(text))))
 
 
 def build(csv_path: Path = CSV_PATH, out_path: Path = OUT_PATH) -> int:

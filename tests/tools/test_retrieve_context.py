@@ -63,7 +63,7 @@ class TestRetrieveContext:
         assert len(artifact) == 1
         assert _codes(artifact) == ["5"]
 
-class _FakeResp:
+class _MockResp:
     def __init__(self, payload):
         self._payload = payload
 
@@ -85,17 +85,17 @@ class TestOpenRouterReranker:
     def test_predict_maps_scores_by_index(self, monkeypatch):
         captured = {}
 
-        def fake_post(url, headers=None, json=None, timeout=None):
+        def mock_post(url, headers=None, json=None, timeout=None):
             captured["url"] = url
             captured["json"] = json
             captured["headers"] = headers
             # results trả về đảo thứ tự index -> hàm phải map đúng về vị trí gốc
-            return _FakeResp({"results": [
+            return _MockResp({"results": [
                 {"index": 1, "relevance_score": 0.8},
                 {"index": 0, "relevance_score": 0.3},
             ]})
 
-        monkeypatch.setattr(rc.requests, "post", fake_post)
+        monkeypatch.setattr(rc.requests, "post", mock_post)
         scores = OpenRouterReranker(model="m").predict([("q", "docA"), ("q", "docB")])
 
         assert scores == [0.3, 0.8]                       # map đúng theo index
@@ -106,10 +106,10 @@ class TestOpenRouterReranker:
 
     def test_predict_missing_index_defaults_zero(self, monkeypatch):
         # API chỉ chấm 1 doc -> doc còn lại giữ điểm mặc định 0.0
-        def fake_post(url, headers=None, json=None, timeout=None):
-            return _FakeResp({"results": [{"index": 0, "relevance_score": 0.9}]})
+        def mock_post(url, headers=None, json=None, timeout=None):
+            return _MockResp({"results": [{"index": 0, "relevance_score": 0.9}]})
 
-        monkeypatch.setattr(rc.requests, "post", fake_post)
+        monkeypatch.setattr(rc.requests, "post", mock_post)
         scores = OpenRouterReranker().predict([("q", "a"), ("q", "b")])
         assert scores == [0.9, 0.0]
 

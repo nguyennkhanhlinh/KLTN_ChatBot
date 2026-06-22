@@ -23,7 +23,6 @@ _splitter = RecursiveCharacterTextSplitter(
     separators=["\n", ". ", " ", ""],
 )
 
-
 def _build_docs(item: dict) -> list[Document]:
     chunks = _splitter.split_text(item.get("mo_ta", ""))
     return [

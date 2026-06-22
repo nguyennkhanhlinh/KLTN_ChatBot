@@ -1,5 +1,6 @@
 import sys
 import os
+import math
 import asyncio
 from typing import Optional
 
@@ -81,21 +82,46 @@ async def get_user_memory(user_id: str, key: str) -> Optional[dict]:
     return item.value if item else None
 
 
+# Ngưỡng cosine để coi 2 rule là TRÙNG NGỮ NGHĨA (vd "BĐS" ≈ "bất động sản").
+_DEDUP_THRESHOLD = float(os.getenv("MEMORY_DEDUP_THRESHOLD", "0.9"))
+
+
+def _cosine(a: list[float], b: list[float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    return dot / (na * nb) if na and nb else 0.0
+
+
+async def _dedup_rules(existing_rules: list[str], new_rules: list[str]) -> list[str]:
+    emb = _memory_embeddings()
+    kept: list[str] = []
+    kept_vecs: list[list[float]] = []
+    for rule in [*existing_rules, *new_rules]:
+        rule = (rule or "").strip()
+        if not rule or rule in kept:          # rỗng hoặc trùng chữ chính xác
+            continue
+        try:
+            rvec = await emb.aembed_query(rule)
+        except Exception:                      # embedding lỗi → chỉ dedup theo chữ
+            kept.append(rule)
+            continue
+        if any(_cosine(rvec, kv) >= _DEDUP_THRESHOLD for kv in kept_vecs):
+            continue                           # đã có câu cùng nghĩa → bỏ
+        kept.append(rule)
+        kept_vecs.append(rvec)
+    return kept
+
+
 async def update_user_preferences(user_id: str, new_rules: list[str]) -> None:
     existing = await get_user_memory(user_id, "preferences") or {"rules": []}
-    rules = existing.get("rules", [])
-    for rule in new_rules:
-        if rule not in rules:
-            rules.append(rule)
+    rules = await _dedup_rules(existing.get("rules", []), new_rules)
     await save_user_memory(user_id, "preferences", {"rules": rules})
 
 
 async def update_user_profile(user_id: str, new_rules: list[str]) -> None:
     existing = await get_user_memory(user_id, "profile") or {"rules": []}
-    rules = existing.get("rules", [])
-    for rule in new_rules:
-        if rule not in rules:
-            rules.append(rule)
+    rules = await _dedup_rules(existing.get("rules", []), new_rules)
     await save_user_memory(user_id, "profile", {"rules": rules})
 
 

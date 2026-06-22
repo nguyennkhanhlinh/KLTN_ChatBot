@@ -3,17 +3,16 @@ import os
 import json
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone, timedelta
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 
-from langchain.agents import create_agent, AgentState
-from langchain.agents.middleware import before_model
+from langchain.agents import create_agent
+from langchain.agents.middleware import wrap_model_call
 from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
-from langchain_core.messages import HumanMessage, RemoveMessage
-from langgraph.graph.message import REMOVE_ALL_MESSAGES
-from langgraph.runtime import Runtime
+from langchain_core.messages import HumanMessage, SystemMessage
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -38,18 +37,29 @@ _REASONING_MODELS = frozenset({"o4-mini"})
 _DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 
 
-@before_model
-def _trim_history(state: AgentState, runtime: Runtime):
-    """Giữ tối đa MAX_USER_TURNS lượt hội thoại gần nhất trước mỗi lần gọi LLM.
+_VN_TZ = timezone(timedelta(hours=7))
+_WEEKDAYS_VI = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"]
 
-    Luật trim nằm ở short_memory (trim_messages_to_last_user_turns); ở đây chỉ
-    gói kết quả vào state op của LangGraph (RemoveMessage + danh sách giữ lại).
+
+def _now_vn_str() -> str:
+    """Ngày giờ hiện tại theo giờ Việt Nam (không phụ thuộc timezone của server)."""
+    now = datetime.now(_VN_TZ)
+    return f"{_WEEKDAYS_VI[now.weekday()]}, ngày {now:%d/%m/%Y}, lúc {now:%H:%M} (giờ Việt Nam)"
+
+
+@wrap_model_call
+async def _trim_for_model(request, handler):
+    """Giữ tối đa MAX_USER_TURNS lượt hội thoại gần nhất TRONG PHẦN ĐƯA VÀO LLM,
+    đồng thời chèn ngày giờ thực để model luôn biết thời điểm hiện tại.
     """
-    messages = state["messages"]
-    kept = trim_messages_to_last_user_turns(messages)
-    if len(kept) == len(messages):  
-        return None
-    return {"messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES), *kept]}
+    trimmed = trim_messages_to_last_user_turns(request.messages)
+    dt_note = SystemMessage(content=(
+        f"Bối cảnh thời gian thực (CHỈ tham chiếu nội bộ): hôm nay là {_now_vn_str()}. "
+        "Dùng để hiểu các mốc thời gian tương đối khi tư vấn BĐS ('tháng này', 'gần đây', 'năm nay'). "
+        "TUYỆT ĐỐI KHÔNG trả lời trực tiếp câu hỏi chung về ngày/giờ (vd 'hôm nay là ngày mấy') — "
+        "đó là ngoài phạm vi tư vấn BĐS, hãy từ chối lịch sự."
+    ))
+    return await handler(request.override(messages=[dt_note, *trimmed]))
 
 _supervisor_cache: dict = {}
 _sentinel = object() 
@@ -284,7 +294,7 @@ def build_supervisor(model: str = _DEFAULT_MODEL, checkpointer=_sentinel):
         checkpointer=actual_checkpointer,
         store=get_store(),
         context_schema=Context,
-        middleware=[_trim_history],
+        middleware=[_trim_for_model],
     )
 
     if use_default_cp:

@@ -61,7 +61,7 @@ def mock_chat(monkeypatch):
     """Patch build_supervisor (LLM) + _register_session (DB) để test chat offline."""
     handle = _ChatHandle()
 
-    class _FakeSupervisor:
+    class _MockSupervisor:
         async def ainvoke(self, state, config=None, *, context=None):
             if handle.exc is not None:
                 raise handle.exc
@@ -73,7 +73,7 @@ def mock_chat(monkeypatch):
             # mô phỏng stream_mode="values": phát 1 snapshot state cuối
             yield {"messages": handle.messages}
 
-    monkeypatch.setattr("backend.main.build_supervisor", lambda *a, **k: _FakeSupervisor())
+    monkeypatch.setattr("backend.main.build_supervisor", lambda *a, **k: _MockSupervisor())
 
     async def _noop_register(*a, **k):
         return None
@@ -83,7 +83,7 @@ def mock_chat(monkeypatch):
     return handle
 
 
-class _FakeCursor:
+class _MockCursor:
     def __init__(self):
         self.fetchone_results = []   # hàng đợi kết quả cho fetchone()
         self.fetchall_results = []   # hàng đợi kết quả cho fetchall()
@@ -112,7 +112,7 @@ class _FakeCursor:
         return False
 
 
-class _FakeConn:
+class _MockConn:
     def __init__(self, cursor):
         self._cursor = cursor
 
@@ -126,18 +126,18 @@ class _FakeConn:
         return False
 
 
-class _FakePool:
+class _MockPool:
     def __init__(self, cursor):
-        self._conn = _FakeConn(cursor)
+        self._conn = _MockConn(cursor)
 
     def connection(self):
         return self._conn
 
 
-class _FakeCheckpointer:
+class _MockCheckpointer:
     def __init__(self):
-        self.cursor = _FakeCursor()
-        self.conn = _FakePool(self.cursor)
+        self.cursor = _MockCursor()
+        self.conn = _MockPool(self.cursor)
         self.aget_tuple_result = None  # snapshot trả cho _get_messages
 
     async def aget_tuple(self, config):
@@ -145,15 +145,15 @@ class _FakeCheckpointer:
 
 
 @pytest.fixture
-def fake_db(monkeypatch):
+def mock_db(monkeypatch):
     """Giả lập DB để test endpoint dùng Postgres mà không cần DB thật.
 
     Cách dùng trong test:
-        fake_db.cursor.fetchone_results = [(1, "alice", "secret", "user")]
-        fake_db.cursor.fetchall_results = [[...row1...], [...row2...]]
-        fake_db.cursor.raise_on_execute = Exception("duplicate")  # lỗi trùng key
+        mock_db.cursor.fetchone_results = [(1, "alice", "secret", "user")]
+        mock_db.cursor.fetchall_results = [[...row1...], [...row2...]]
+        mock_db.cursor.raise_on_execute = Exception("duplicate")  # lỗi trùng key
     """
-    ckpt = _FakeCheckpointer()
+    ckpt = _MockCheckpointer()
     monkeypatch.setattr("backend.main.get_checkpointer", lambda: ckpt)
 
     async def _no_hidden():

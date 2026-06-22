@@ -68,7 +68,7 @@ jobs:
 
   # Job 3: Build — build Docker image và push lên Docker Hub
   build:
-    name: Build Docker image
+    name: Build Docker image and Push to Docker Hub
     runs-on: ubuntu-latest
     needs: test                       # chỉ build khi test pass
     steps:

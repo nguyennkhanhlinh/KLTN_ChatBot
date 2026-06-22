@@ -47,7 +47,7 @@ def _ensure_properties_data() -> int:
     """Tạo bảng properties nếu chưa có, nạp data_clean.csv nếu bảng đang rỗng.
 
     Idempotent — chạy mỗi lần startup nhưng chỉ ingest khi DB mới (bảng rỗng),
-    để mọi DB mới (Docker/cloud) tự đầy đủ dữ liệu mà không cần thao tác tay.
+    để mọi DB mới tự đầy đủ dữ liệu mà không cần thao tác tay.
     """
     from data.database import Database
 
@@ -286,6 +286,7 @@ def _build_chat_payload(msgs: list, usage: dict | None = None) -> dict:
     chart_data = None
     recommendation_text = None
     analyst_text = None
+    finance_present = False
 
     for msg in reversed(current_turn_msgs):
         if not isinstance(msg, ToolMessage):
@@ -306,6 +307,8 @@ def _build_chat_payload(msgs: list, usage: dict | None = None) -> dict:
             analyst_text = content
         if recommendation_text is None and tool_name == "recommendation_agent" and content.strip():
             recommendation_text = content
+        if tool_name == "finance_agent" and content.strip():
+            finance_present = True
 
     if chart_data and recommendation_text:
         return {"type": "mixed", "chart": chart_data, "text": recommendation_text, **extra}
@@ -313,10 +316,10 @@ def _build_chat_payload(msgs: list, usage: dict | None = None) -> dict:
         return {"type": "mixed", "chart": chart_data, "text": analyst_text, **extra}
     if chart_data:
         return {"type": "chart", "data": chart_data, **extra}
-    # Danh sách BĐS / phân tích: ưu tiên message cuối của supervisor (đã được chuẩn hoá
-    # format theo Supervisor_prompt), để stream hiển thị GIỐNG HỆT lúc reload từ checkpointer
-    # — vốn cũng đọc AIMessage cuối của supervisor. Tránh lệch định dạng (vd mất số 1.2.3)
-    # do output thô của sub-agent không nhất quán.
+
+    if recommendation_text and not analyst_text and not finance_present:
+        return {"type": "text", "content": recommendation_text, **extra}
+
     if analyst_text or recommendation_text:
         if final_text and final_text.strip():
             return {"type": "text", "content": final_text, **extra}
@@ -378,6 +381,20 @@ async def chat_stream(req: ChatRequest, current_user: dict = Depends(get_current
 
             final_msgs: list = []
             seen_calls: set = set()  # tránh phát trùng 1 lần gọi tool (theo id)
+
+            # Nạp sẵn tool_call cũ trong lịch sử thread vào seen_calls, nếu không
+            # turn sau sẽ phát lại step của turn trước (state stream gồm cả lịch sử cũ).
+            try:
+                prior = await supervisor.aget_state(config)
+                prior_msgs = (prior.values or {}).get("messages", []) if prior else []
+                for m in prior_msgs:
+                    for tc in getattr(m, "tool_calls", None) or []:
+                        cid = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
+                        if cid:
+                            seen_calls.add(cid)
+            except Exception:
+                pass
+
             async for state in supervisor.astream(
                 {"messages": [HumanMessage(content=req.question)]},
                 {**config},
@@ -426,32 +443,42 @@ def _msg_to_dict(m) -> dict:
 def _filter_visible(msgs: list) -> list:
     result = []
     pending_ai = None
-    pending_chart_tool = None  # last ToolMessage with chart JSON in this turn
+    pending_chart_tool = None        # last ToolMessage with chart JSON in this turn
+    pending_reco_tool = None         # output thô recommendation_agent trong lượt này
+    pending_other_specialist = False  # có analyst/finance trong lượt này không
+
+    def _flush():
+        if pending_chart_tool is not None:
+            result.append(pending_chart_tool)
+        elif pending_reco_tool is not None and not pending_other_specialist:
+            result.append(pending_reco_tool)
+        elif pending_ai is not None:
+            result.append(pending_ai)
+
     for m in msgs:
         if isinstance(m, HumanMessage):
-            # Flush previous turn
-            if pending_chart_tool is not None:
-                result.append(pending_chart_tool)
-                # Bỏ pending_ai khi đã có chart — AIMessage chỉ là tóm tắt lại, sẽ trùng
-            elif pending_ai is not None:
-                result.append(pending_ai)
+            _flush()
             pending_ai = None
             pending_chart_tool = None
+            pending_reco_tool = None
+            pending_other_specialist = False
             result.append(m)
         elif isinstance(m, AIMessage):
             pending_ai = m
         elif isinstance(m, ToolMessage):
+            name = getattr(m, "name", "") or ""
             try:
                 data = json.loads(m.content)
                 if "chart_type" in data and "columns" in data and "data" in data:
                     pending_chart_tool = m
+                    continue
             except (json.JSONDecodeError, TypeError):
                 pass
-    # Flush last turn
-    if pending_chart_tool is not None:
-        result.append(pending_chart_tool)
-    elif pending_ai is not None:
-        result.append(pending_ai)
+            if name == "recommendation_agent" and (m.content or "").strip():
+                pending_reco_tool = m
+            elif name in ("analyst_agent", "finance_agent"):
+                pending_other_specialist = True
+    _flush()
     return result
 
 

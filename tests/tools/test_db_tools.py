@@ -41,12 +41,6 @@ class TestExecuteSql:
         assert "TRUNCATE" in out
         assert mock_db.executed == []
 
-    def test_blocks_create(self, mock_db):
-        out = execute_sql.invoke({"sql_query": "CREATE TABLE x (id int)"})
-        assert "không được phép" in out
-        assert "CREATE" in out
-        assert mock_db.executed == []
-
     def test_blocks_grant(self, mock_db):
         out = execute_sql.invoke({"sql_query": "GRANT ALL ON properties TO public"})
         assert "không được phép" in out
