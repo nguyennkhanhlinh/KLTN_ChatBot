@@ -1,5 +1,7 @@
 import sys
 import os
+import re
+import unicodedata
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -7,6 +9,33 @@ import pandas as pd
 from data.database import Database
 
 CSV_PATH = os.path.join(os.path.dirname(__file__), "data_clean.csv")
+
+
+def _light_normalize(value):
+    if value is None:
+        return None
+    text = unicodedata.normalize("NFC", str(value)).strip()
+    if text.lower() == "nan":
+        return "NAN"
+    text = text.lstrip("-").strip()
+    text = re.sub(r"\s+", " ", text)
+    text = text.rstrip(" .")
+    return text or None
+
+
+def normalize_phap_ly(value):
+    text = _light_normalize(value)
+    if not text or text == "NAN":
+        return text
+    core = re.sub(r"\s*/\s*", "/", text.lower())
+    if core.startswith("sổ đỏ/sổ hồng"):
+        return "Sổ đỏ/ Sổ hồng (sử dụng chung)" if "sử dụng chung" in core else "Sổ đỏ/ Sổ hồng"
+    return text
+
+
+def normalize_noi_that(value):
+    return _light_normalize(value)
+
 
 PROPERTIES_SQL = """
     INSERT INTO properties (ma_code, tieu_de, ngay_dang, quan, phuong, tong_gia, gia_theo_m2, dien_tich, so_tang, so_phong_ngu, so_phong_tam, phap_ly, noi_that)
@@ -33,8 +62,8 @@ def load_data():
             int(row["Số tầng"]) if row["Số tầng"] is not None else None,
             int(row["Số phòng ngủ"]) if row["Số phòng ngủ"] is not None else None,
             int(row["Số phòng tắm, vệ sinh"]) if row["Số phòng tắm, vệ sinh"] is not None else None,
-            row["Pháp lý"],
-            row["Nội thất"],
+            normalize_phap_ly(row["Pháp lý"]),
+            normalize_noi_that(row["Nội thất"]),
         )
         for _, row in df.iterrows()
     ]

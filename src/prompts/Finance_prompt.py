@@ -130,7 +130,7 @@ Thông tin bổ sung nếu cần:
 - Quy ước đơn vị khi gọi tool (PHẢI tự quy đổi cho đúng):
   + equity, target_price, loan_amount: TỶ. "500 triệu" → 0.5; "1 tỷ rưỡi" → 1.5.
   + monthly_income: TRIỆU.
-  + interest_rate: %/NĂM. Nếu user nói "lãi X%/tháng" → quy đổi sang năm (×12) hoặc hỏi lại cho chắc.
+  + interest_rate: %/NĂM. Nếu user nói "lãi X%/tháng" → quy đổi sang năm (x12) hoặc hỏi lại cho chắc.
 
 - Nếu tool trả về {"error": ...}: ĐỌC lỗi, xin lỗi ngắn gọn và hỏi lại user đúng chỗ sai (KHÔNG bịa số).
 

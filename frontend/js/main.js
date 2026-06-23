@@ -701,7 +701,11 @@ function _renderChart(data) {
   const div = document.createElement('div');
   div.className = 'message bot-message chart-message';
   const cols = data.columns || [];
-  const rows = data.data || [];
+  const rows = (data.data || []).map(r => {
+    const v = r[0];
+    const missing = v === null || v === undefined || String(v).trim() === '' || String(v).trim().toUpperCase() === 'NAN';
+    return missing ? ['Không có dữ liệu', ...r.slice(1)] : r;
+  });
   const ctype = data.chart_type || 'bar';
 
   const n = rows.length;

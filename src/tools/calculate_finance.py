@@ -49,13 +49,13 @@ def calculate_finance(
     2. target_price - equity (suy từ giá nhà và vốn tự có).
     LTV chỉ tính khi biết giá nhà (target_price).
     """
-    # --- Guardrail: chặn đầu vào bất thường, báo lỗi rõ thay vì tính ra số sai ---
+
     if not (0 < interest_rate <= 50):
         return {"error": f"Lãi suất {interest_rate}%/năm có vẻ bất thường. "
                          "Nhập lãi suất theo %/năm (ví dụ 9.0)."}
     if not (1 <= loan_term_years <= 50):
         return {"error": f"Thời hạn vay {loan_term_years} năm có vẻ bất thường. "
-                         "Nên trong khoảng 1–50 năm."}
+                         "Nên trong khoảng 1-50 năm."}
     for _name, _val in (("equity", equity), ("target_price", target_price),
                         ("loan_amount", loan_amount), ("monthly_income", monthly_income)):
         if _val is not None and _val < 0:
