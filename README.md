@@ -5,7 +5,7 @@ Hệ thống Chatbot tư vấn bất động sản và tài chính mua nhà tạ
 
 | Tiêu chí | GPT-4.1 mini | o4-mini | DeepSeek V4 Flash | Mistral Small 4 |
 |----------|--------------|---------|-------------------|-----------------|
-| **Loại mô hình** | Mô hình GPT tổng quát | Mô hình suy luận | Mô hình ngôn ngữ tối ưu chi phí | Mô hình ngôn ngữ nhỏ gọn, tối ưu cho tác vụ phổ thông |
+| **Loại mô hình** | Mô hình GPT tổng quát | Mô hình suy luận | Mô hình ngôn ngữ tối ưu chi phí | Phù hợp với những tác vụ phổ thông |
 | **Khả năng suy luận** | Khá tốt | Rất tốt trong các tác vụ cần suy luận nhiều bước | Khá, phù hợp với các câu hỏi đơn giản đến trung bình | Khá, suy luận nhiều bước ở mức trung bình |
 | **Tốc độ phản hồi** | Khá nhanh | Trung bình (cần thời gian suy luận) | Khá nhanh với các tác vụ đơn giản | Khá nhanh đối với các tác vụ thông thường |
 
