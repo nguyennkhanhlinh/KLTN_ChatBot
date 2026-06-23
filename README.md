@@ -15,7 +15,7 @@ Hệ thống Chatbot tư vấn bất động sản và tài chính mua nhà tạ
 |--------|---------|
 | **Supervisor Agent** | Trực tiếp tiếp nhận yêu cầu từ người dùng, phân tích ý định, lựa chọn tác nhân chuyên môn phù hợp, tổng hợp kết quả và trả kết quả cuối cùng cho người dùng | 
 | **Analyst Agent** | Xử lý các yêu cầu liên quan đến thống kê, phân tích dữ liệu, so sánh thị trường và trực quan hóa dữ liệu bất động sản| 
-| **Finance Agent** | Xử lý các yêu cầu tư vấn tài chính mua bất động sản, bao gồm tính toán khả năng vay, khoản trả góp, tỷ lệ vay và đánh giá mức độ an toàn tài chính | 
+| **Finance Agent** | Xử lý các yêu cầu tư vấn tài chính mua bất động sản, bao gồm tính toán khả năng vay, khoản trả góp, tỷ lệ vay và đánh giá mức độ an toàn tài chính, so sánh kịch bản vay theo thời hạn/lãi suất; tính lãi suất hỗn hợp | 
 | **Recommendation Agent** | Xử lý các yêu cầu tìm kiếm và đề xuất tin đăng bất động sản, kết hợp lọc theo điều kiện cấu trúc với tìm kiếm ngữ nghĩa theo nội dung mô tả | 
 
 Tính năng chính
