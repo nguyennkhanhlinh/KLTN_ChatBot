@@ -1,4 +1,4 @@
-# Hệ thống ChatBot tư vấn Bất động sản và tài chính mua nhà
+# Hệ thống AI tư vấn Bất động sản và tài chính mua nhà
 
 ## 1. Giới thiệu
 Hệ thống Chatbot tư vấn bất động sản và tài chính mua nhà tại Hà Nội được xây dựng nhằm hỗ trợ người dùng tra cứu, phân tích và tìm kiếm, tư vấn tài chính bất động sản thông qua ngôn ngữ tự nhiên. Hệ thống cung cấp cho người dùng lựa chọn một trong bốn mô hình ngay trên giao diện Chatbot như gpt-4.1-mini, o4-mini, deepseek v4 flash và mistral small 4
